@@ -1,32 +1,24 @@
 const express = require('express')
-const sql = require('mssql')
+const {sql, connectDB} = require('./config/db')
 
 const app = express()
+
 app.use(express.json())
 
-const config = {
-    user: 'sa',
-    password: '123456',
-    server: 'localhost',
-    database: 'QUANLI_SACH',
-    port: 1433,
-    options: { 
-        trustServerCertificate: true
-    }
-}
+connectDB()
 
-
-app.get('/', async(req, res) => {
+app.get('/', async (req, res) => {
     try {
-        await sql.connect(config)
-        const result  = await sql.query`SELECT GETDATE() AS time`
+        const result = await sql.query`SELECT GETDATE() AS time`
         res.json(result.recordset)
     }
+
     catch(error){
         console.log(error)
-        res.send(error.message)
+        res.status(500).send(error.message)
     }
 })
 
-
-app.listen(3000, () => {console.log('http://localhost:3000')})
+app.listen(3000, () => {
+    console.log('Server chay tai http://localhost:3000')
+})
