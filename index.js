@@ -1,11 +1,14 @@
 const express = require('express')
 const {sql, connectDB} = require('./config/db')
+const textBookRoutes = require('./routes/textbookRoutes')
 
 const app = express()
 
 app.use(express.json())
 
 connectDB()
+
+app.use('/giaotrinh', textBookRoutes)
 
 app.get('/', async (req, res) => {
     try {
