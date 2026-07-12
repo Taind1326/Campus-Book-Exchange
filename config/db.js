@@ -18,6 +18,7 @@ async function connectDB() {
     
     catch(error){
         console.log('Loi ket noi server', error.message)
+        throw error
     }
 }
 
