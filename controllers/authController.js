@@ -199,4 +199,31 @@ async function login(req, res) {
     }
 }
 
-module.exports = {register, login}
+
+async function getCurrentUser(req, res) {
+    try {
+        const result = await sql.query`
+            SELECT TK.MATK, TK.TENTK, TK.VAITRO, TK.TRANGTHAI,
+                    TK.LYDOHANCHED, TK.HANCHEDEN, TK.NGAYTAO,
+                    TK.LANCUOIDANGNHAP, SV.MASV, SV.TENSV, SV.SDT
+                    
+            FROM TAIKHOAN TK
+            JOIN SINHVIEN SV ON TK.MASV = SV.MASV
+            WHERE TK.MATK = ${req.user.MATK}`
+
+        if (result.recordset.length === 0){
+            return res.status(404).json({message: 'Không tìm thấy thông tin tài khoản!'})
+        }
+
+        return res.status(200).json({user: result.recordset[0]})
+    }
+
+    catch(error){
+        console.log('Lỗi lấy thông tin tài khoản!', error)
+
+        return res.status(500).json({message: 'Không thể lấy thông tin tài khoản!'})
+    }
+}
+
+
+module.exports = {register, login, getCurrentUser}
