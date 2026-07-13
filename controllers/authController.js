@@ -1,4 +1,5 @@
 const bcrypt = require('bcrypt')
+const jwt = require('jsonwebtoken')
 const {sql} = require('../config/db')
 
 const SALT_ROUNDS = 10
@@ -115,4 +116,87 @@ async function register(req, res) {
 }
 
 
-module.exports = {register}
+async function login(req, res) {
+    const {TENTK, MATKHAU, GHI_NHO = false} = req.body
+
+    if (!TENTK || !MATKHAU){
+        return res.status(400).json({message: 'Vui lòng nhập tên tài khoản và mật khẩu!'})
+    }
+
+    if (typeof TENTK !== 'string' || typeof MATKHAU !== 'string' || typeof GHI_NHO !== 'boolean'){
+        return res.status(400).json({message: 'Dữ liệu đăng nhập không hợp lệ!'})
+    }
+
+    const tenTaiKhoan = TENTK.trim().toLowerCase()
+
+    if (!tenTaiKhoan){
+        return res.status(400).json({message: 'Tên tài khoản không được để trống!'})
+    }
+
+    try {
+        const result = await sql.query`
+            SELECT TK.MATK, TK.TENTK, TK.MATKHAU_HASH,
+                    TK.VAITRO, TK.TRANGTHAI, TK.LYDOHANCHED,
+                    TK.HANCHEDEN, SV.MASV, SV.TENSV, SV.SDT
+                
+            FROM TAIKHOAN TK
+            JOIN SINHVIEN SV ON TK.MASV = SV.MASV
+            WHERE TK.TENTK = ${tenTaiKhoan}`
+
+        if (result.recordset.length === 0){
+            return res.status(401).json({message: 'Tên tài khoản hoặc mật khẩu không chính xác!'})
+        }
+
+        const taiKhoan = result.recordset[0]
+
+        if (taiKhoan.TRANGTHAI === 'Tạm khóa'){
+            return res.status(403).json({message: 'Tài khoản đang tạm bị khóa!'})
+        }
+
+        if (taiKhoan.TRANGTHAI === 'Đã khóa'){
+            return res.status(403).json({message: 'Tài khoản đã bị khóa!'})
+        }
+
+        const matKhauDung = await bcrypt.compare(MATKHAU, taiKhoan.MATKHAU_HASH)
+
+        if (!matKhauDung){
+            return res.status(401).json({message: 'Tên tài khoản hoặc mật khẩu không chính xác!'})
+        }
+
+        const thoiHanToken = GHI_NHO ? process.env.JWT_REMEMBER_EXPIRES_IN
+                                     : process.env.JWT_EXPIRES_IN
+                                    
+        const token = jwt.sign({
+            MATK: taiKhoan.MATK,
+            TENTK: taiKhoan.TENTK,
+            VAITRO: taiKhoan.VAITRO
+        }, 
+        
+        process.env.JWT_SECRET,
+        {
+            expiresIn: thoiHanToken
+        }
+    )
+
+    await sql.query`
+        UPDATE TAIKHOAN
+        SET LANCUOIDANGNHAP = SYSDATETIME()
+        WHERE MATK = ${taiKhoan.MATK}`
+
+    return res.status(200).json({message: 'Đăng nhập thành công!', token, user: {
+        MATK: taiKhoan.MATK,
+        MASV: taiKhoan.MASV,
+        TENSV: taiKhoan.TENSV,
+        TENTK: taiKhoan.TENTK,
+        SDT: taiKhoan.SDT,
+        VAITRO: taiKhoan.VAITRO,
+        TRANGTHAI: taiKhoan.TRANGTHAI}})
+    }
+
+    catch(error){
+        console.log('Lỗi đăng nhập!', error)
+        return res.status(500).json({message: 'Không thể đăng nhập!'})
+    }
+}
+
+module.exports = {register, login}
