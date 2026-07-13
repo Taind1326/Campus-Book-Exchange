@@ -4,6 +4,8 @@ const express = require('express')
 const {sql, connectDB} = require('./config/db')
 const textBookRoutes = require('./routes/textbookRoutes')
 const authRoutes = require('./routes/authRoutes')
+const cloudinary = require('./config/cloudinary')
+
 
 const app = express()
 const PORT = 3000
