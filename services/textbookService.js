@@ -156,4 +156,27 @@ async function getTextbookById(maGT) {
 }
 
 
-module.exports = {getPublicTextbooks, getTextbookById, createTextbook}
+
+async function getMyTextbooks(nguoiDang) {
+    const request = new sql.Request()
+
+    request.input('NGUOIDANG', sql.Int, nguoiDang)
+
+    const result = await request.query(`
+        SELECT GT.MAGT, GT.TENGT, MH.TENMH, GT.SOLUONG, GT.DONGIA,
+                GT.LOAI, GT.TRANGTHAI, GT.NGAYDANG, HA.DUONGDAN AS ANHDAIDIEN
+                
+        FROM GIAOTRINH GT
+        JOIN MONHOC MH ON GT.MAHOCPHAN = MH.MAHOCPHAN
+        OUTER APPLY (SELECT TOP (1) H.DUONGDAN
+                    FROM HINHANHGIAOTRINH H
+                    WHERE H.MAGT = GT.MAGT
+                    ORDER BY H.THUTU ASC ) HA
+        WHERE GT.NGUOIDANG = @NGUOIDANG
+        ORDER BY GT.NGAYDANG DESC`)
+
+    return result.recordset
+}
+
+
+module.exports = {getPublicTextbooks, getTextbookById, getMyTextbooks, createTextbook}

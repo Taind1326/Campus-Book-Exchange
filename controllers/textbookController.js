@@ -1,4 +1,4 @@
-const { getPublicTextbooks, getTextbookById: getTextbookByIdService, createTextbook: createTextbookService } = require('../services/textbookService')
+const { getPublicTextbooks, getTextbookById: getTextbookByIdService, getMyTextbooks: getMyTextbooksService, createTextbook: createTextbookService } = require('../services/textbookService')
 const {validateCreateTextbook} = require('../validators/textbookValidator')
 
 
@@ -39,6 +39,18 @@ async function getTextbookById(req, res) {
 }
 
 
+async function getMyTextbooks(req, res) {
+    try {
+        const textbooks = await getMyTextbooksService(req.user.MATK)
+        return res.status(200).json(textbooks)
+    }
+
+    catch(error){
+        console.log('Lỗi lấy giáo trình của tôi: ', error)
+        return res.status(500).json({message: 'Không thể lấy danh sách giáo trình của bạn!'})
+    }
+}
+
 
 async function createTextbook(req, res) {
     if (req.user.TRANGTHAI === 'Bị hạn chế'){
@@ -68,4 +80,4 @@ async function createTextbook(req, res) {
     }
 }
 
-module.exports = {getAllTextbooks, getTextbookById, createTextbook}
+module.exports = {getAllTextbooks, getTextbookById, getMyTextbooks, createTextbook}
