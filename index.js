@@ -5,6 +5,7 @@ const {sql, connectDB} = require('./config/db')
 const textBookRoutes = require('./routes/textbookRoutes')
 const authRoutes = require('./routes/authRoutes')
 const cloudinary = require('./config/cloudinary')
+const courseRoutes = require('./routes/courseRoutes')
 
 
 const app = express()
@@ -14,6 +15,7 @@ app.use(express.json())
 
 app.use('/auth', authRoutes)
 app.use('/giaotrinh', textBookRoutes)
+app.use('/monhoc', courseRoutes)
 
 app.get('/', async (req, res) => {
     try {
