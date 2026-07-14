@@ -1,4 +1,4 @@
-const { getPublicTextbooks, createTextbook: createTextbookService } = require('../services/textbookService')
+const { getPublicTextbooks, getTextbookById: getTextbookByIdService, createTextbook: createTextbookService } = require('../services/textbookService')
 const {validateCreateTextbook} = require('../validators/textbookValidator')
 
 
@@ -13,6 +13,31 @@ async function getAllTextbooks(req, res) {
         return res.status(500).json({message:'Không thể lấy danh sách giáo trình!'})
     }
 }
+
+
+async function getTextbookById(req, res) {
+    const maGT = Number(req.params.id)
+
+    if (!Number.isInteger(maGT) || maGT <= 0){
+        return res.status(400).json({message: 'Mã giáo trình không hợp lệ!'})
+    }
+
+    try {
+        const textbook = await getTextbookByIdService(maGT)
+
+        if (!textbook){
+            return res.status(404).json({message: 'Không tìm thấy giáo trình!'})
+        }
+
+        return res.status(200).json(textbook)
+    }
+
+    catch(error){
+        console.log('Lỗi lấy chi tiết giáo trình: ',error)
+        return res.status(500).json({message: 'Không thể lấy thông tin giáo trình!'})
+    }
+}
+
 
 
 async function createTextbook(req, res) {
@@ -43,4 +68,4 @@ async function createTextbook(req, res) {
     }
 }
 
-module.exports = {getAllTextbooks, createTextbook}
+module.exports = {getAllTextbooks, getTextbookById, createTextbook}

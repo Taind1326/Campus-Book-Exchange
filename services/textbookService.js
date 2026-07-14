@@ -20,7 +20,7 @@ async function insertTextbook(transaction, data, nguoiDang) {
 
     request.input('TENGT', sql.NVarChar(300), data.tenGT)
     request.input('SOLUONG', sql.Int, data.soLuong)
-    request.input('DONGIA', sql.Decimal(12, 0),data.donGia)
+    request.input('DONGIA', sql.Decimal(12, 0), data.donGia)
     request.input('HOCKY', sql.Int, data.hocKy)
     request.input('MAHOCPHAN', sql.VarChar(20), data.maHocPhan)
     request.input('MOTA', sql.NVarChar(sql.MAX), data.moTa)
@@ -118,4 +118,42 @@ async function getPublicTextbooks() {
 }
 
 
-module.exports = {getPublicTextbooks, createTextbook}
+async function getTextbookById(maGT) {
+    const textbookRequest = new sql.Request()
+
+    textbookRequest.input('MAGT', sql.Int, maGT)
+
+    const textbookResult = await textbookRequest.query(`
+        SELECT GT.MAGT, GT.TENGT, GT.SOLUONG, GT.DONGIA, GT.HOCKY,
+                GT.MOTA, GT.LOAI, GT.TRANGTHAI, GT.NGAYDANG,
+                MH.TENMH, TK.TENTK
+                
+        FROM GIAOTRINH GT
+        JOIN MONHOC MH ON GT.MAHOCPHAN = MH.MAHOCPHAN
+        JOIN TAIKHOAN TK ON GT.NGUOIDANG = TK.MATK
+        WHERE GT.MAGT = @MAGT
+        AND GT.TRANGTHAI = N'Đang hiển thị'`)
+
+    if (textbookResult.recordset.length === 0){
+        return null
+    }
+
+    const imageRequest = new sql.Request()
+
+    imageRequest.input('MAGT', sql.Int, maGT)
+
+    const imageResult = await imageRequest.query(`
+        SELECT DUONGDAN, THUTU
+        FROM HINHANHGIAOTRINH
+        WHERE MAGT = @MAGT
+        ORDER BY THUTU ASC`)
+
+    const textbook = textbookResult.recordset[0]
+
+    textbook.HINHANH = imageResult.recordset
+
+    return textbook
+}
+
+
+module.exports = {getPublicTextbooks, getTextbookById, createTextbook}
