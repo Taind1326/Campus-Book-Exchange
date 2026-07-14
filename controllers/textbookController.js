@@ -1,4 +1,6 @@
 const {sql} = require('../config/db')
+const {uploadImages, deleteImages} = require('../utils/cloudinaryUpload')
+
 
 async function getAllTextbooks(req, res) {
     try{
@@ -16,84 +18,159 @@ async function getAllTextbooks(req, res) {
 
 
 async function createTextbook(req, res) {
-    const {TENGT, SOLUONG, DONGIA, HOCKY, MAMH, MOTA, LOAI, TRANGTHAI} = req.body;
+    console.log('BODY:', req.body)
+console.log('FILES:', req.files)
+    const {TENGT, SOLUONG, DONGIA, HOCKY, MAHOCPHAN, MOTA, LOAI} = req.body;
 
     if (req.user.TRANGTHAI === 'Bị hạn chế'){
         return res.status(403).json({message: 'Tài khoản bị hạn chế, không thể đăng giáo trình!'})
     }
 
-    if (!TENGT || SOLUONG === undefined || DONGIA === undefined || HOCKY === undefined|| !MAMH || !LOAI){
+    if (TENGT === undefined || SOLUONG === undefined || DONGIA === undefined || HOCKY === undefined || MAHOCPHAN === undefined || LOAI === undefined){
         return res.status(400).json({message: "Vui lòng nhập đầy đủ thông tin!"})
     }
 
-    if (typeof TENGT === 'string' || Number.isInteger(SOLUONG) || typeof DONGIA === 'number' || Number.isInteger(HOCKY)){
-        return res.status(403).json({message: 'Dữ liệu giáo trình không hợp lệ!'})
+    if (typeof TENGT !== 'string' || typeof SOLUONG !== 'string' || typeof DONGIA !== 'string' || typeof HOCKY !== 'string' || typeof MAHOCPHAN !== 'string' || typeof LOAI !== 'string' || (MOTA !== undefined && typeof MOTA !== 'string')){
+        return res.status(400).json({message: 'Dữ liệu giáo trình không hợp lệ!'})
     }
 
     const tenGT = TENGT.trim()
-    const soLuong = SOLUONG.trim()
-    const donGia = DONGIA.trim()
-    const hocKy = HOCKY.trim()
-    const maMH = MAMH.trim()
-    const moTa = MOTA.trim()
+    const maHocPhan = MAHOCPHAN.trim()
     const loai = LOAI.trim()
+    const moTa = MOTA?.trim() || null
 
-    if (tenGT.length < 4){
-        return res.status(400).json({message: 'Tên giáo trình phải có ít nhất 4 ký tự!'})
+    const soLuong = Number(SOLUONG)
+    const donGia = Number(DONGIA)
+    const hocKy = Number(HOCKY)
+
+    if (tenGT.length < 3){
+        return res.status(400).json({message: 'Tên giáo trình phải có ít nhất 3 ký tự!'})
+    }
+
+    if (!Number.isInteger(soLuong) || soLuong <= 0){
+        return res.status(400).json({message: 'Số lượng là số nguyên lớn hơn 0!'})
+    }
+
+    if (!Number.isFinite(donGia) || donGia < 0){
+        return res.status(400).json({message: 'Đơn giá không hợp lệ!'})
     }
 
     if (!Number.isInteger(hocKy) || hocKy < 1 || hocKy > 12){
         return res.status(400).json({message: 'Học kỳ phải từ 1 đến 12'})
     }
 
-    if (soLuong <= 0){
-        return res.status(400).json({message: "Số lượng phải lớn hơn 0"})
+    if (!/^\d{6,20}$/.test(maHocPhan)){
+        return res.status(400).json({message: 'Mã học phần không hợp lệ!'})
     }
 
-    if(!['Bán', 'Tặng', 'Trao đổi'].includes(loai)){
-        return res.status(400).json({message: "Loại giáo trình không hợp  lệ!"})
+    const danhSachLoai = ['Bán', 'Tặng', 'Trao đổi']
+
+    if (!danhSachLoai.includes(loai)){
+        return res.status(400).json({message: 'Loại giáo trình không hợp lệ!'})
     }
 
-    if (loai == 'Bán' && donGia <= 0){
+    if (loai === 'Bán' && donGia <= 0){
         return res.status(400).json({message: 'Giá bán phải lớn hơn 0!'})
     }
 
-    if (['Tặng', 'Trao đổi'].includes(loai)){
-        return res.status(400).json({message: 'Giá của giáo trình trao đổi hoặc tặng phải bằng 0'})
+    if (['Tặng', 'Trao đổi'].includes(loai) && donGia !== 0){
+        return res.status(400).json({message: 'Giá của giáo trình tặng hoặc trao đổi phải bằng 0!'})
     }
 
+    if (!req.files || req.files.length === 0){
+        return res.status(400).json({message: 'Vui lòng chọn ít nhất 1 hình ảnh!'})
+    }
+
+    const nguoiDang = req.user.MATK
     const transaction = new sql.Transaction()
+
     let transactionStarted = false
+    let uploadedImages = []
 
     try {
-        await transaction.begin()
+        const courseRequest = new sql.Request()
 
+        courseRequest.input('MAHOCPHAN', sql.VarChar(20), maHocPhan)
+
+        const courseResult = await courseRequest.query(`SELECT MAHOCPHAN FROM MONHOC WHERE MAHOCPHAN = @MAHOCPHAN`)
+
+        if (courseResult.recordset.length === 0){
+            return res.status(404).json({message: 'Mã học phần không tồn tại!'})
+        }
+
+        uploadedImages = await uploadImages(req.files)
+
+        await transaction.begin()
         transactionStarted = true
 
-        const request = sql.Request(transaction)
+        const textbookRequest = new sql.Request(transaction)
 
-        request.input('TENGT', sql.NVarChar(300), tenGT)
-        request.input('SOLUONG', sql.Int, soLuong)
-        request.input('DONGIA', sql.Decimal(10, 2), donGia)
-        request.input('HOCKY', sql.Int, hocKy)
-        request.input('MAMH', sql.Int, maMH)
-        request.input('MOTA', sql.NVarChar(MAX), moTa)
-        request.input('LOAI', sql.NVarChar(50), loai)
-        request.input('TRANGTHAI', sql.NVarChar(50), TINHTRANG)
+        textbookRequest.input('TENGT', sql.NVarChar(300), tenGT)
+        textbookRequest.input('SOLUONG', sql.Int, soLuong)
+        textbookRequest.input('DONGIA', sql.Decimal(12, 0), donGia)
+        textbookRequest.input('HOCKY', sql.Int, hocKy)
+        textbookRequest.input('MAHOCPHAN', sql.VarChar(20), maHocPhan)
+        textbookRequest.input('MOTA', sql.NVarChar(sql.MAX), moTa)
+        textbookRequest.input('LOAI', sql.NVarChar(50), loai)
+        textbookRequest.input('NGUOIDANG', sql.Int, nguoiDang)
 
-        await request.query(`INSERT INTO GIAOTRINH(TENGT, SOLUONG, DONGIA, HOCKY, MAMH, MOTA, LOAI, TRANGTHAI)
-                            VALUES(@TENGT, @SOLUONG, @DONGIA, @HOCKY, @MAMH, @MOTA, @LOAI, T@RANGTHAI)`)
+        const textbookResult = await textbookRequest.query(`
+            INSERT INTO GIAOTRINH (TENGT, SOLUONG, DONGIA, HOCKY, MAHOCPHAN, MOTA, LOAI, NGUOIDANG)
+            OUTPUT INSERTED.MAGT 
+            VALUES (@TENGT, @SOLUONG, @DONGIA, @HOCKY, @MAHOCPHAN, @MOTA, @LOAI, @NGUOIDANG)`)
+
+        const maGT = textbookResult.recordset[0].MAGT
+
+        for (const image of uploadedImages){
+            const imageRequest = new sql.Request(transaction)
+
+            imageRequest.input('MAGT', sql.Int, maGT)
+            imageRequest.input('DUONGDAN', sql.NVarChar(500), image.DUONGDAN)
+            imageRequest.input('PUBLIC_ID', sql.NVarChar(300), image.PUBLIC_ID)
+            imageRequest.input('THUTU', sql.Int, image.THUTU)
+
+            await imageRequest.query(`
+                INSERT INTO HINHANHGIAOTRINH (MAGT, DUONGDAN, PUBLIC_ID, THUTU)
+                VALUES (@MAGT, @DUONGDAN, @PUBLIC_ID, @THUTU)`)
+        }
 
         await transaction.commit()
+        transactionStarted = false
 
-        res.status(201).json({message: 'Đăng tải giáo trình thành công!'})
+        return res.status(201).json({message: 'Đăng tải giáo trình thành công!', textbook: {
+            MAGT: maGT,
+            TENGT: tenGT,
+            MAHOCPHAN: maHocPhan,
+            HINHANH: uploadedImages
+        }
+    })
     }
 
     catch(error){
         if (transactionStarted){
-                    await transaction.rollback()
-                }
-                throw error
+            try {
+                await transaction.rollback()
+            }
+
+            catch(rollbackError){
+                console.log('Lỗi rollback SQL: ',rollbackError)
+            }
+        }
+
+        if (uploadedImages.length > 0){
+            try {
+                const publicIds = uploadedImages.map(image => image.PUBLIC_ID)
+                await deleteImages(publicIds)
+            }
+
+            catch(deleteError){
+                console.log('Lỗi xóa ảnh Cloudinary: ', deleteError)
+            }
+        }
+
+        console.log('Lỗi đăng giáo trình: ', error)
+
+        return res.status(500).json({message: 'Không thể đăng tải giáo trình!'})
     }
 
     
