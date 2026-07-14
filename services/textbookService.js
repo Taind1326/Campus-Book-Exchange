@@ -15,6 +15,44 @@ async function checkCourseExists(maHocPhan) {
 }
 
 
+async function checkUpdatePermission(maGT, nguoiDang) {
+    const request = new sql.Request()
+
+    request.input('MAGT', sql.Int, maGT)
+
+    const result = await request.query(`
+        SELECT NGUOIDANG, TRANGTHAI
+        FROM GIAOTRINH
+        WHERE MAGT = @MAGT`)
+
+    if (result.recordset.length === 0){
+        const error = new Error('Không tìm thấy giáo trình!')
+        error.status = 404
+        throw error
+    }
+
+    const textbook = result.recordset[0]
+
+    if (textbook.NGUOIDANG !== nguoiDang){
+        const error = new Error('Bạn không có quyền chỉnh sửa giáo trình này!')
+        error.status = 403
+        throw error 
+    }
+
+    if (textbook.TRANGTHAI === 'Đang giao dịch'){
+        const error = new Error('Không thể chỉnh sửa giáo trình đang giao dịch!')
+        error.status = 409
+        throw error
+    }
+    
+    if (textbook.TRANGTHAI === 'Đã xóa'){
+        const error = new Error('Không thể chỉnh sửa giáo trình đã xóa!')
+        error.status = 409
+        throw error
+    }
+}
+
+
 async function insertTextbook(transaction, data, nguoiDang) {
     const request = new sql.Request(transaction)
 
@@ -108,6 +146,65 @@ async function createTextbook(data, files, nguoiDang) {
 }
 
 
+
+async function updateTextbook(maGT, data, nguoiDang) {
+    await checkUpdatePermission(maGT, nguoiDang)
+
+    const courseExists = await checkCourseExists(data.maHocPhan)
+
+    if (!courseExists){
+        const error = new Error('Mã học phần không tồn tại!')
+
+        error.status = 404
+        throw error
+    }
+
+    const request = new sql.Request()
+
+    request.input('MAGT', sql.Int, maGT)
+    request.input('NGUOIDANG', sql.Int, nguoiDang)
+    request.input('TENGT', sql.NVarChar(300), data.tenGT)
+    request.input('SOLUONG', sql.Int, data.soLuong)
+    request.input('DONGIA', sql.Decimal(12, 0), data.donGia)
+    request.input('HOCKY', sql.Int, data.hocKy)
+    request.input('MAHOCPHAN', sql.VarChar(20), data.maHocPhan)
+    request.input('MOTA', sql.NVarChar(sql.MAX), data.moTa)
+    request.input('LOAI', sql.NVarChar(50), data.loai)
+
+    const result =  await request.query(`
+        UPDATE GIAOTRINH
+        SET TENGT = @TENGT,
+            SOLUONG = @SOLUONG,
+            DONGIA = @DONGIA,
+            HOCKY = @HOCKY,
+            MAHOCPHAN = @MAHOCPHAN,
+            MOTA = @MOTA,
+            LOAI = @LOAI,
+            TRANGTHAI = CASE
+                            WHEN @SOLUONG = 0 THEN N'Hết hàng'
+                            WHEN TRANGTHAI = N'Hết hàng' THEN N'Đang hiển thị'
+                            ELSE TRANGTHAI
+                        END,
+            NGAYCAPNHAT = SYSDATETIME()
+            WHERE MAGT = @MAGT
+            AND NGUOIDANG = @NGUOIDANG
+            AND TRANGTHAI NOT IN 
+            (
+                N'Đang giao dịch',
+                N'Đã xóa'
+            )
+        `)
+    
+    if (result.rowsAffected[0] === 0){
+        const error = new Error('Không thể cập nhật giáo trình!')
+        error.status = 409
+        throw error
+    }
+
+    return true
+}
+
+
 async function getPublicTextbooks() {
     const result = await sql.query`
         SELECT MAGT, TENGT, TENMH, SOLUONG, DONGIA, LOAI, MOTA, TENTK, NGAYDANG, ANHDAIDIEN
@@ -179,4 +276,4 @@ async function getMyTextbooks(nguoiDang) {
 }
 
 
-module.exports = {getPublicTextbooks, getTextbookById, getMyTextbooks, createTextbook}
+module.exports = {getPublicTextbooks, getTextbookById, getMyTextbooks, createTextbook, updateTextbook}
