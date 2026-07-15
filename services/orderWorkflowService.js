@@ -11,6 +11,8 @@ const {
 
 const {createOrGetConversationForOrder} = require('./conversationService')
 
+const {createOrderNotification} = require('./notificationService')
+
 async function createOrder(data, nguoiMua) {
     const transaction = new sql.Transaction()
     let transactionStarted = false
@@ -30,6 +32,8 @@ async function createOrder(data, nguoiMua) {
         await insertOrderDetail(transaction, maDH, textbook, data.soLuong)
 
         const maCuoc = await createOrGetConversationForOrder(transaction, textbook.MAGT, maDH, nguoiMua, textbook.NGUOIDANG)
+
+        await createOrderNotification(transaction, textbook,maDH, maCuoc)
 
         await transaction.commit()
         transactionStarted = false
