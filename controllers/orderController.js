@@ -1,4 +1,4 @@
-const {createOrder: createOrderService} = require('../services/orderService')
+const {createOrder: createOrderService} = require('../services/orderWorkflowService')
 const {validateCreateOrder} = require('../validators/orderValidator')
 
 async function createOrder(req, res) {
