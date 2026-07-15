@@ -59,16 +59,15 @@ async function insertTextbook(transaction, data, nguoiDang) {
     request.input('TENGT', sql.NVarChar(300), data.tenGT)
     request.input('SOLUONG', sql.Int, data.soLuong)
     request.input('DONGIA', sql.Decimal(12, 0), data.donGia)
-    request.input('HOCKY', sql.Int, data.hocKy)
     request.input('MAHOCPHAN', sql.VarChar(20), data.maHocPhan)
     request.input('MOTA', sql.NVarChar(sql.MAX), data.moTa)
     request.input('LOAI', sql.NVarChar(50), data.loai)
     request.input('NGUOIDANG', sql.Int, nguoiDang)
 
     const result = await request.query(`
-        INSERT INTO GIAOTRINH (TENGT, SOLUONG, DONGIA, HOCKY, MAHOCPHAN, MOTA, LOAI, NGUOIDANG)
+        INSERT INTO GIAOTRINH (TENGT, SOLUONG, DONGIA, MAHOCPHAN, MOTA, LOAI, NGUOIDANG)
         OUTPUT INSERTED.MAGT 
-        VALUES (@TENGT, @SOLUONG, @DONGIA, @HOCKY, @MAHOCPHAN, @MOTA, @LOAI, @NGUOIDANG)`)
+        VALUES (@TENGT, @SOLUONG, @DONGIA, @MAHOCPHAN, @MOTA, @LOAI, @NGUOIDANG)`)
 
     return result.recordset[0].MAGT
 }
@@ -166,7 +165,6 @@ async function updateTextbook(maGT, data, nguoiDang) {
     request.input('TENGT', sql.NVarChar(300), data.tenGT)
     request.input('SOLUONG', sql.Int, data.soLuong)
     request.input('DONGIA', sql.Decimal(12, 0), data.donGia)
-    request.input('HOCKY', sql.Int, data.hocKy)
     request.input('MAHOCPHAN', sql.VarChar(20), data.maHocPhan)
     request.input('MOTA', sql.NVarChar(sql.MAX), data.moTa)
     request.input('LOAI', sql.NVarChar(50), data.loai)
@@ -176,7 +174,6 @@ async function updateTextbook(maGT, data, nguoiDang) {
         SET TENGT = @TENGT,
             SOLUONG = @SOLUONG,
             DONGIA = @DONGIA,
-            HOCKY = @HOCKY,
             MAHOCPHAN = @MAHOCPHAN,
             MOTA = @MOTA,
             LOAI = @LOAI,
@@ -249,7 +246,7 @@ async function getTextbookById(maGT) {
     textbookRequest.input('MAGT', sql.Int, maGT)
 
     const textbookResult = await textbookRequest.query(`
-        SELECT GT.MAGT, GT.TENGT, GT.SOLUONG, GT.DONGIA, GT.HOCKY,
+        SELECT GT.MAGT, GT.TENGT, GT.SOLUONG, GT.DONGIA,
                 GT.MOTA, GT.LOAI, GT.TRANGTHAI, GT.NGAYDANG,
                 MH.TENMH, TK.TENTK
                 
