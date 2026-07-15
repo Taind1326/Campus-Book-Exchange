@@ -49,6 +49,84 @@ function normalizeParticipants(userA, userB){
 }
 
 
+async function findConversation(transaction, maGT, nguoi1, nguoi2) {
+    const request = new sql.Request(transaction)
+
+    request.input('MAGT', sql.Int, maGT)
+    request.input('NGUOI1', sql.Int, nguoi1)
+    request.input('NGUOI2', sql.Int, nguoi2)
+
+    const result = await request.query(`
+        SELECT MACUOC, MAGT, MADH, NGUOI1, NGUOI2,
+                TRANGTHAI, NGAYTAO, HOATDONGCUOI
+        FROM CUOCTROCHUYEN
+        WHERE MAGT = @MAGT
+            AND NGUOI1 = @NGUOI1
+            AND NGUOI2 = @NGUOI2`)
+
+    if (result.recordset.length === 0){
+        return null
+    }
+
+    return result.recordset[0]
+
+}
 
 
-module.exports = {getTextbookForConversation, validateConversationAvailability, normalizeParticipants}
+
+async function insertConversation(transaction, maGT, maDH, nguoi1, nguoi2) {
+    const request = new sql.Request(transaction)
+
+    request.input('MAGT', sql.Int, maGT)
+    request.input('MADH', sql.Int, maDH)
+    request.input('NGUOI1', sql.Int, nguoi1)
+    request.input('NGUOI2', sql.Int, nguoi2)
+
+    const result = await request.query(`
+        INSERT INTO CUOCTROCHUYEN (MAGT, MADH, NGUOI1, NGUOI2)
+        OUTPUT INSERTED.MACUOC
+        VALUES (@MAGT, @MADH, @NGUOI1, @NGUOI2)`)
+
+    return result.recordset[0].MACUOC
+}
+
+
+
+async function attachOrderToConversation(transaction, maCuoc, maDH) {
+    const request = new sql.Request(transaction)
+
+    request.input('MACUOC', sql.BigInt, maCuoc)
+    request.input('MADH', sql.Int, maDH)
+
+    await request.query(`
+        UPDATE CUOCTROCHUYEN
+        SET MADH = @MADH,
+        TRANGTHAI = N'Đang hoạt động',
+        HOATDONGCUOI = SYSDATETIME()
+        WHERE MACUOC = @MACUOC`)
+}
+
+
+
+async function createOrGetConversationForOrder(transaction, maGT, maDH, nguoiMua, nguoiBan) {
+    const {nguoi1, nguoi2} = normalizeParticipants(nguoiMua, nguoiBan)
+    const existingConversation = await findConversation(transaction, maGT, nguoi1, nguoi2)
+    
+    if (existingConversation){
+        await attachOrderToConversation(transaction, existingConversation.MACUOC, maDH)
+        return existingConversation.MACUOC
+    }
+
+    return insertConversation(transaction, maGT, maDH, nguoi1, nguoi2)
+}
+
+
+module.exports = {
+    getTextbookForConversation,
+    validateConversationAvailability, 
+    normalizeParticipants,
+    findConversation,
+    insertConversation,
+    attachOrderToConversation,
+    createOrGetConversationForOrder
+}

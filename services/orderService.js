@@ -1,5 +1,5 @@
 const {sql} = require('../config/db')
-
+const {createOrGetConversationForOrder} = require('./conversationService')
 
 function validateOrder(textbook, nguoiMua, soLuong) {
     if (textbook.NGUOIDANG === nguoiMua){
@@ -144,11 +144,14 @@ async function createOrder(data, nguoiMua) {
 
         await insertOrderDetail(transaction, maDH, textbook, data.soLuong)
 
+        const maCuoc = await createOrGetConversationForOrder(transaction, textbook.MAGT, maDH, nguoiMua, textbook.NGUOIDANG)
+
         await transaction.commit()
         transactionStarted = false
 
         return {
             maDH,
+            maCuoc,
             maGT: textbook.MAGT,
             tenGT: textbook.TENGT,
             nguoiBan: textbook.NGUOIDANG,
