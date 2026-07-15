@@ -205,6 +205,34 @@ async function updateTextbook(maGT, data, nguoiDang) {
 }
 
 
+async function deleteTextbook(maGT, nguoiDang) {
+    await checkUpdatePermission(maGT, nguoiDang)
+    const request = new sql.Request()
+
+    request.input('MAGT', sql.Int, maGT)
+    request.input('NGUOIDANG', sql.Int, nguoiDang)
+
+    const result = await request.query(`
+        UPDATE GIAOTRINH
+        SET TRANGTHAI = N'Đã xóa',
+        NGAYCAPNHAT = SYSDATETIME()
+        WHERE MAGT = @MAGT
+            AND NGUOIDANG = @NGUOIDANG
+            AND TRANGTHAI NOT IN
+            (
+                N'Đang giao dịch',
+                N'Đã xóa'
+            )`)
+
+    if (result.rowsAffected[0] === 0){
+        const error = new Error('Không thể xóa giáo trình!')
+        error.status = 409
+        throw error
+    }
+    return true
+}
+
+
 async function getPublicTextbooks() {
     const result = await sql.query`
         SELECT MAGT, TENGT, TENMH, SOLUONG, DONGIA, LOAI, MOTA, TENTK, NGAYDANG, ANHDAIDIEN
@@ -270,10 +298,18 @@ async function getMyTextbooks(nguoiDang) {
                     WHERE H.MAGT = GT.MAGT
                     ORDER BY H.THUTU ASC ) HA
         WHERE GT.NGUOIDANG = @NGUOIDANG
+            AND GT.TRANGTHAI <> N'Đã xóa'
         ORDER BY GT.NGAYDANG DESC`)
 
     return result.recordset
 }
 
 
-module.exports = {getPublicTextbooks, getTextbookById, getMyTextbooks, createTextbook, updateTextbook}
+module.exports = {
+    getPublicTextbooks, 
+    getTextbookById, 
+    getMyTextbooks, 
+    createTextbook, 
+    updateTextbook,
+    deleteTextbook
+}

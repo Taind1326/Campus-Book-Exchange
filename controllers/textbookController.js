@@ -2,7 +2,9 @@ const { getPublicTextbooks,
         getTextbookById: getTextbookByIdService, 
         getMyTextbooks: getMyTextbooksService, 
         createTextbook: createTextbookService,
-        updateTextbook: updateTextbookService} = require('../services/textbookService')
+        updateTextbook: updateTextbookService,
+        deleteTextbook: deleteTextbookService
+    } = require('../services/textbookService')
 
 const {validateCreateTextbook, validateUpdateTextbook} = require('../validators/textbookValidator')
 
@@ -112,4 +114,33 @@ async function updateTextbook(req, res) {
     }
 }
 
-module.exports = {getAllTextbooks, getTextbookById, getMyTextbooks, createTextbook, updateTextbook}
+
+async function deleteTextbook(req, res) {
+    const maGT = Number(req.params.id)
+
+    if (!Number.isInteger(maGT) || maGT <= 0){
+        return res.status(400).json({message: 'Mã giáo trình không hợp lệ!'})
+    }
+
+    try {
+        await deleteTextbookService(maGT, req.user.MATK)
+
+        return res.status(200).json({message: 'Đã xóa giáo trình!'})
+    }
+
+    catch(error){
+        console.log('Lỗi xóa giáo trình: ', error)
+
+        return res.status(error.status || 500).json({message: error.status ? error.message : 'Không thể xóa giáo trình!'})
+    }
+}
+
+
+module.exports = {
+    getAllTextbooks, 
+    getTextbookById, 
+    getMyTextbooks, 
+    createTextbook, 
+    updateTextbook,
+    deleteTextbook
+}

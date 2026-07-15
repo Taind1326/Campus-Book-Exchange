@@ -3,7 +3,9 @@ const {getAllTextbooks,
        getTextbookById, 
        getMyTextbooks, 
        createTextbook,
-       updateTextbook} = require('../controllers/textbookController')
+       updateTextbook,
+       deleteTextbook
+} = require('../controllers/textbookController')
 
 const {authenticateToken} = require('../middlewares/authMiddleware')
 const {uploadTextbookImages} = require('../middlewares/uploadMiddleware')
@@ -18,5 +20,6 @@ router.post('/', authenticateToken, uploadTextbookImages.array('HINHANH', 5), cr
 
 router.put('/:id', authenticateToken, uploadTextbookImages.array('HINHANH', 5), updateTextbook)
 
+router.delete('/:id', authenticateToken, deleteTextbook)
 
 module.exports = router
