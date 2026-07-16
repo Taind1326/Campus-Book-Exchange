@@ -1,7 +1,8 @@
 const {
     getNotifications: getNotificationsService,
     markNotificationAsRead: markNotificationAsReadService,
-    markAllNotificationsAsRead: markAllNotificationsAsReadService
+    markAllNotificationsAsRead: markAllNotificationsAsReadService,
+    getUnreadNotificationCount: getUnreadNotificationCountService
 } = require('../services/notificationService')
 
 const {validateNotificationId} = require('../validators/notificationValidator')
@@ -54,4 +55,20 @@ async function markAllNotificationsAsRead(req, res) {
 }
 
 
-module.exports = {getNotifications, markNotificationAsRead, markAllNotificationsAsRead}
+
+async function getUnreadNotificationCount(req, res) {
+    try {
+        const count = await getUnreadNotificationCountService(req.user.MATK)
+
+        return res.status(200).json({unreadCount: count})
+    }
+
+    catch(error){
+        console.log('Lỗi đếm thông báo chưa đọc: ', error)
+        return res.status(500).json({message: 'Không thể đếm thông báo chưa đọc!'})
+    }
+}
+
+
+
+module.exports = {getNotifications, markNotificationAsRead, markAllNotificationsAsRead, getUnreadNotificationCount}

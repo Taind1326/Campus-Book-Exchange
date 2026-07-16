@@ -3,12 +3,15 @@ const {authenticateToken} = require('../middlewares/authMiddleware')
 const {
     getNotifications,
     markNotificationAsRead,
-    markAllNotificationsAsRead
+    markAllNotificationsAsRead,
+    getUnreadNotificationCount
 } = require('../controllers/notificationController')
 
 const router = express.Router()
 
 router.get('/', authenticateToken, getNotifications)
+router.get('/unread-count', authenticateToken, getUnreadNotificationCount)
+
 
 router.patch('/read-all', authenticateToken, markAllNotificationsAsRead)
 

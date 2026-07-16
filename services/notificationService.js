@@ -113,11 +113,31 @@ async function markAllNotificationsAsRead(nguoiNhan) {
 }
 
 
+
+async function getUnreadNotificationCount(nguoiNhan) {
+    const request = new sql.Request()
+
+    request.input('NGUOINHAN', sql.Int, nguoiNhan)
+
+    const result = await request.query(`
+        SELECT SOLUONGCHUADOC
+        FROM V_THONGBAO_CHUADOC
+        WHERE NGUOINHAN = @NGUOINHAN`)
+
+    if (result.recordset.length === 0){
+        return 0
+    }
+
+    return Number(result.recordset[0].SOLUONGCHUADOC)
+}
+
+
 module.exports = {
     insertNotification,
      createOrderNotification, 
      getNotifications,
      getNotificationById,
      markNotificationAsRead,
-     markAllNotificationsAsRead
+     markAllNotificationsAsRead,
+     getUnreadNotificationCount
 }
