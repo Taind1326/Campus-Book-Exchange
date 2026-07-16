@@ -1,6 +1,7 @@
 const {
     sendTextMessage: sendTextMessageService,
-    getConversationMessages: getConversationMessagesService
+    getConversationMessages: getConversationMessagesService,
+    markConversationMessagesAsRead: markConversationMessagesAsReadService
 } = require('../services/messageWorkflowService')
 
 const {
@@ -45,10 +46,29 @@ async function getConversationMessages(req, res) {
         console.log('Lỗi lấy lịch sử tin nhắn: ', error)
         return res.status(error.status || 500).json({message: error.status ? error.message : 'Không thể lấy lịch sử tin nhắn!'})
     }
-
-
 }
 
 
 
-module.exports = {sendTextMessage, getConversationMessages}
+async function markConversationMessagesAsRead(req, res) {
+    const validation = validateConversationId(req.params.maCuoc)
+
+    if (!validation.isValid){
+        return res.status(validation.status).json({message: validation.message})
+    }
+
+    try {
+        await markConversationMessagesAsReadService(validation.data, req.user.MATK)
+
+        return res.status(200).json({message: 'Đã đánh dấu các tin nhắn đã đọc!'})
+    }
+
+    catch(error){
+        console.log('Lỗi đánh dấu tin nhắn: ', error)
+        return res.status(error.status || 500).json({message: error.status ? error.message : 'Không thể đánh dấu tin nhắn!'})
+    }
+}
+
+
+
+module.exports = {sendTextMessage, getConversationMessages, markConversationMessagesAsRead}

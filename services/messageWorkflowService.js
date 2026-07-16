@@ -7,7 +7,8 @@ const {
     getReceiverId,
     insertMessage,
     updateConversationActivity,
-    getMessagesByConversation
+    getMessagesByConversation,
+    markConversationMessagesAsRead: markConversationMessagesAsReadService
 } = require('./messageService')
 
 
@@ -90,4 +91,39 @@ async function getConversationMessages(maCuoc, userId) {
 }
 
 
-module.exports = {sendTextMessage, getConversationMessages}
+async function markConversationMessagesAsRead(maCuoc, userId) {
+    const transaction = new sql.Transaction()
+    let transactionStarted = false
+
+    try{
+        await transaction.begin()
+        transactionStarted = true
+
+        const conversation = await getConversationById(transaction, maCuoc)
+
+        validateParticipant(conversation, userId)
+
+        await markConversationMessagesAsReadService(transaction, maCuoc, userId)
+
+        await transaction.commit()
+        transactionStarted = false
+    }
+
+    catch(error){
+        if(transactionStarted){
+            try{
+                await transaction.rollback()
+            }
+
+            catch(rollbackError){
+                console.log('Lỗi rollback đọc tin nhắn:', rollbackError)
+            }
+        }
+
+        throw error
+    }
+}
+
+
+
+module.exports = {sendTextMessage, getConversationMessages, markConversationMessagesAsRead}

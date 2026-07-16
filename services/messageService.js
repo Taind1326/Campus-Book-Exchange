@@ -98,6 +98,25 @@ async function getMessagesByConversation(transaction, maCuoc) {
 }
 
 
+
+async function markConversationMessagesAsRead(transaction, maCuoc, nguoiNhan) {
+    const request = new sql.Request(transaction)
+
+    request.input('MACUOC', sql.BigInt, maCuoc)
+    request.input('NGUOINHAN', sql.Int, nguoiNhan)
+
+    await request.query(`
+        UPDATE TINNHAN
+        SET DADOC = 1,
+            THOIGIANDOC = SYSDATETIME()
+        WHERE MACUOC = @MACUOC
+            AND NGUOINHAN = @NGUOINHAN
+            AND DADOC = 0
+            AND DAXOA = 0`)
+}
+
+
+
 module.exports = {
     getConversationById,
     validateParticipant, 
@@ -105,5 +124,6 @@ module.exports = {
     getReceiverId,
     insertMessage,
     updateConversationActivity,
-    getMessagesByConversation
+    getMessagesByConversation,
+    markConversationMessagesAsRead
 }
