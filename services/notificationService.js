@@ -98,10 +98,26 @@ async function markNotificationAsRead(maTB, nguoiNhan) {
 }
 
 
+
+async function markAllNotificationsAsRead(nguoiNhan) {
+    const request = new sql.Request()
+
+    request.input('NGUOINHAN', sql.Int, nguoiNhan)
+
+    await request.query(`
+        UPDATE THONGBAO
+        SET DADOC = 1,
+        THOIGIANDOC = SYSDATETIME()
+        WHERE NGUOINHAN = @NGUOINHAN
+            AND DADOC = 0`)
+}
+
+
 module.exports = {
     insertNotification,
      createOrderNotification, 
      getNotifications,
      getNotificationById,
-     markNotificationAsRead
+     markNotificationAsRead,
+     markAllNotificationsAsRead
 }

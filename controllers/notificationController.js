@@ -1,6 +1,7 @@
 const {
     getNotifications: getNotificationsService,
-    markNotificationAsRead: markNotificationAsReadService
+    markNotificationAsRead: markNotificationAsReadService,
+    markAllNotificationsAsRead: markAllNotificationsAsReadService
 } = require('../services/notificationService')
 
 const {validateNotificationId} = require('../validators/notificationValidator')
@@ -39,5 +40,18 @@ async function markNotificationAsRead(req, res) {
 }
 
 
+async function markAllNotificationsAsRead(req, res) {
+    try {
+        await markAllNotificationsAsReadService(req.user.MATK)
 
-module.exports = {getNotifications, markNotificationAsRead}
+        return res.status(200).json({message: 'Đã đánh dấu tất cả thông báo là đã đọc!'})
+    }
+
+    catch(error){
+        console.log('Lỗi đánh dấu tất cả thông báo đã đọc: ', error)
+        return res.status(500).json({message: 'Không thể đánh dấu tất cả thông báo!'})
+    }
+}
+
+
+module.exports = {getNotifications, markNotificationAsRead, markAllNotificationsAsRead}
