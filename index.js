@@ -7,6 +7,7 @@ const authRoutes = require('./routes/authRoutes')
 const cloudinary = require('./config/cloudinary')
 const courseRoutes = require('./routes/courseRoutes')
 const orderRoutes = require('./routes/orderRoutes')
+const notificationRoutes = require('./routes/notificationRoutes')
 
 
 const app = express()
@@ -18,6 +19,7 @@ app.use('/auth', authRoutes)
 app.use('/giaotrinh', textBookRoutes)
 app.use('/monhoc', courseRoutes)
 app.use('/orders', orderRoutes)
+app.use('/notifications', notificationRoutes)
 
 
 app.get('/', async (req, res) => {

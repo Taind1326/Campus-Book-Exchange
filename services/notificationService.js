@@ -37,4 +37,22 @@ async function createOrderNotification(transaction, textbook, maDH, maCuoc) {
 
 
 
-module.exports = {insertNotification, createOrderNotification}
+async function getNotifications(nguoiNhan) {
+    const request = new sql.Request()
+
+    request.input('NGUOINHAN', sql.Int, nguoiNhan)
+
+    const result = await request.query(`
+        SELECT MATB, TIEUDE, NOIDUNG, LOAI, MADH, MAGT, MACUOC,
+                MATN, MADG, DUONGDAN, DADOC, THOIGIAN, THOIGIANDOC
+        FROM THONGBAO
+        WHERE NGUOINHAN = @NGUOINHAN
+        ORDER BY THOIGIAN DESC`)
+
+    return result.recordset
+}
+
+
+
+
+module.exports = {insertNotification, createOrderNotification, getNotifications}
