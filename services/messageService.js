@@ -116,7 +116,6 @@ async function markConversationMessagesAsRead(transaction, maCuoc, nguoiNhan) {
 }
 
 
-
 module.exports = {
     getConversationById,
     validateParticipant, 

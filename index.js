@@ -9,6 +9,7 @@ const courseRoutes = require('./routes/courseRoutes')
 const orderRoutes = require('./routes/orderRoutes')
 const notificationRoutes = require('./routes/notificationRoutes')
 const messageRoutes = require('./routes/messageRoutes')
+const conversationRoutes = require('./routes/conversationRoutes')
 
 
 const app = express()
@@ -22,6 +23,7 @@ app.use('/monhoc', courseRoutes)
 app.use('/orders', orderRoutes)
 app.use('/notifications', notificationRoutes)
 app.use('/messages', messageRoutes)
+app.use('/conversations', conversationRoutes)
 
 
 app.get('/', async (req, res) => {
