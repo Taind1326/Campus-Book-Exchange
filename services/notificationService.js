@@ -54,5 +54,54 @@ async function getNotifications(nguoiNhan) {
 
 
 
+async function getNotificationById(maTB) {
+    const request = new sql.Request()
 
-module.exports = {insertNotification, createOrderNotification, getNotifications}
+    request.input('MATB', sql.BigInt, maTB)
+
+    const result = await request.query(`
+        SELECT MATB, NGUOINHAN, DADOC
+        FROM THONGBAO
+        WHERE MATB = @MATB`)
+
+    if (result.recordset.length === 0){
+        const error = new Error('Không tìm thấy thông báo!')
+        error.status = 404
+        throw error
+    }
+    return result.recordset[0]
+}
+
+
+async function markNotificationAsRead(maTB, nguoiNhan) {
+    const notification = await getNotificationById(maTB)
+
+    if (notification.NGUOINHAN !== nguoiNhan){
+        const error = new Error('Bạn không có quyền thao tác thông báo này!')
+        error.status = 403
+        throw error
+    }
+
+    if (notification.DADOC){
+        return
+    }
+
+    const request = new sql.Request()
+
+    request.input('MATB', sql.BigInt, maTB)
+
+    await request.query(`
+        UPDATE THONGBAO
+        SET DADOC = 1,
+        THOIGIANDOC = SYSDATETIME()
+        WHERE MATB = @MATB`)
+}
+
+
+module.exports = {
+    insertNotification,
+     createOrderNotification, 
+     getNotifications,
+     getNotificationById,
+     markNotificationAsRead
+}
