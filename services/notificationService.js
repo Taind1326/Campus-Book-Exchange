@@ -16,10 +16,12 @@ async function insertNotification(transaction, data) {
 
     const result = await request.query(`
         INSERT INTO THONGBAO (NGUOINHAN, TIEUDE, NOIDUNG, LOAI, MADH, MAGT, MACUOC, MATN, MADG, DUONGDAN)
-        OUTPUT INSERTED.MATB
+        OUTPUT INSERTED.MATB, INSERTED.NGUOINHAN, INSERTED.TIEUDE, INSERTED.NOIDUNG,
+                INSERTED.LOAI, INSERTED.MADH, INSERTED.MAGT, INSERTED.MACUOC,
+                INSERTED.MATN, INSERTED.MADG, INSERTED.DUONGDAN, INSERTED.DADOC, INSERTED.THOIGIAN
         VALUES (@NGUOINHAN, @TIEUDE, @NOIDUNG, @LOAI, @MADH, @MAGT, @MACUOC, @MATN, @MADG, @DUONGDAN)`)
 
-    return result.recordset[0].MATB
+    return result.recordset[0]
 }
 
 
@@ -89,12 +91,15 @@ async function markNotificationAsRead(maTB, nguoiNhan) {
     const request = new sql.Request()
 
     request.input('MATB', sql.BigInt, maTB)
+    request.input('NGUOINHAN', sql.Int, nguoiNhan)
 
     await request.query(`
         UPDATE THONGBAO
         SET DADOC = 1,
         THOIGIANDOC = SYSDATETIME()
-        WHERE MATB = @MATB`)
+        WHERE MATB = @MATB
+            AND NGUOINHAN = @NGUOINHAN
+            AND DADOC = 0`)
 }
 
 

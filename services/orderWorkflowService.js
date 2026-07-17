@@ -1,4 +1,5 @@
 const {sql} = require('../config/db')
+const {getIO} = require('../config/socket')
 
 const {
     validateOrder,
@@ -33,10 +34,20 @@ async function createOrder(data, nguoiMua) {
 
         const maCuoc = await createOrGetConversationForOrder(transaction, textbook.MAGT, maDH, nguoiMua, textbook.NGUOIDANG)
 
-        await createOrderNotification(transaction, textbook,maDH, maCuoc)
+        const notification = await createOrderNotification(transaction, textbook,maDH, maCuoc)
 
         await transaction.commit()
         transactionStarted = false
+
+        try {
+            const io = getIO()
+
+            io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
+        }
+
+        catch(socketError){
+            console.error( 'Lỗi gửi thông báo realtime tạo đơn hàng:', socketError)
+        }
 
         return {
             maDH,
