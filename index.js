@@ -1,7 +1,12 @@
+const http = require('http')
+const {Server} = require('socket.io')
+
 require('dotenv').config()
 
 const express = require('express')
 const {sql, connectDB} = require('./config/db')
+const {setIO} = require('./config/socket')
+const {initializeSocket} = require('./sockets/socketServer')
 const textBookRoutes = require('./routes/textbookRoutes')
 const authRoutes = require('./routes/authRoutes')
 const cloudinary = require('./config/cloudinary')
@@ -13,6 +18,19 @@ const conversationRoutes = require('./routes/conversationRoutes')
 
 
 const app = express()
+
+const server = http.createServer(app)
+
+const io = new Server(server, {
+    cors: {
+        origin: '*',
+        methods: ['GET', 'POST', 'PATCH']
+    }
+})
+setIO(io)
+
+initializeSocket(io)
+
 const PORT = 3000
 
 app.use(express.json())
@@ -43,7 +61,7 @@ async function startServer() {
     try {
         await connectDB()
 
-        app.listen(PORT, () => {console.log(`Server chạy tại http://localhost:${PORT}`)})
+        server.listen(PORT, () => {console.log(`Server chạy tại http://localhost:${PORT}`)})
     }
 
     catch(error){

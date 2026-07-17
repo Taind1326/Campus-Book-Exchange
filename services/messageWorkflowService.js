@@ -1,5 +1,7 @@
 const {sql} = require('../config/db')
 
+const {getIO} = require('../config/socket')
+
 const {
     getConversationById,
     validateParticipant,
@@ -33,6 +35,17 @@ async function sendTextMessage(data, nguoiGui) {
 
         await transaction.commit()
         transactionStarted = false
+
+        try {
+            const io = getIO()
+
+            io.to(`user:${nguoiGui}`).emit('message:sent', message)
+            io.to(`user:${nguoiNhan}`).emit('message:new', message)
+        }
+
+        catch(socketError){
+            console.log('Lỗi emit tin nhắn realtime: ', socketError)
+        }
         
         return message
     }
