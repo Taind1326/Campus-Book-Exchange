@@ -137,12 +137,25 @@ async function getUnreadNotificationCount(nguoiNhan) {
 }
 
 
+async function createReviewNotification(transaction, review, order){
+    return insertNotification(transaction,{
+        nguoiNhan: order.NGUOIBAN,
+        tieuDe: 'Bạn nhận được đánh giá mới',
+        noiDung: `Bạn vừa nhận được đánh giá ${review.SOSAO} sao.`,
+        loai: 'Đánh giá',
+        maDH: review.MADH,
+        maDG: review.MADG
+    })
+}
+
+
 module.exports = {
     insertNotification,
-     createOrderNotification, 
-     getNotifications,
-     getNotificationById,
-     markNotificationAsRead,
-     markAllNotificationsAsRead,
-     getUnreadNotificationCount
+    createOrderNotification, 
+    getNotifications,
+    getNotificationById,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    getUnreadNotificationCount,
+    createReviewNotification
 }
