@@ -91,7 +91,7 @@ async function markNotificationAsRead(maTB, nguoiNhan) {
     const request = new sql.Request()
 
     request.input('MATB', sql.BigInt, maTB)
-    request.input('NGUOINHAN', sql.Int, nguoiNhan)
+    request.input('NGUOINHAN', sql.Int, nguoiNhan) 
 
     await request.query(`
         UPDATE THONGBAO
