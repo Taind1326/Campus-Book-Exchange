@@ -8,9 +8,7 @@ const {
     insertReview
 } = require('./reviewService')
 
-const {
-    createReviewNotification
-} = require('./notificationService')
+const {createReviewNotification} = require('./notificationService')
 
 
 async function createReview(data, nguoiDanhGia) {
@@ -21,31 +19,15 @@ async function createReview(data, nguoiDanhGia) {
         await transaction.begin()
         transactionStarted = true
 
-        const order = await getOrderForReview(
-            transaction,
-            data.maDH
-        )
+        const order = await getOrderForReview(transaction, data.maDH)
 
         validateReviewOrder(order, nguoiDanhGia)
 
-        await checkExistingReview(
-            transaction,
-            data.maDH,
-            nguoiDanhGia
-        )
+        await checkExistingReview(transaction, data.maDH, nguoiDanhGia)
 
-        const review = await insertReview(
-            transaction,
-            data,
-            nguoiDanhGia,
-            order.NGUOIBAN
-        )
+        const review = await insertReview(transaction, data, nguoiDanhGia, order.NGUOIBAN)
 
-        const notification = await createReviewNotification(
-            transaction,
-            review,
-            order
-        )
+        const notification = await createReviewNotification(transaction, review, order)
 
         await transaction.commit()
         transactionStarted = false
@@ -53,15 +35,11 @@ async function createReview(data, nguoiDanhGia) {
         try {
             const io = getIO()
 
-            io.to(`user:${notification.NGUOINHAN}`)
-                .emit('notification:new', notification)
+            io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
         }
 
         catch (socketError) {
-            console.error(
-                'Lỗi gửi thông báo realtime đánh giá:',
-                socketError
-            )
+            console.error('Lỗi gửi thông báo realtime đánh giá:', socketError)
         }
 
         return review
@@ -74,10 +52,7 @@ async function createReview(data, nguoiDanhGia) {
             }
 
             catch (rollbackError) {
-                console.error(
-                    'Lỗi rollback tạo đánh giá:',
-                    rollbackError
-                )
+                console.error('Lỗi rollback tạo đánh giá:', rollbackError)
             }
         }
 
@@ -86,6 +61,4 @@ async function createReview(data, nguoiDanhGia) {
 }
 
 
-module.exports = {
-    createReview
-}
+module.exports = {createReview}
