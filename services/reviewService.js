@@ -17,19 +17,19 @@ async function getOrderForReview(transaction, maDH) {
 
 function validateReviewOrder(order, nguoiDanhGia) {
     if (!order) {
-        const error = new Error('Đơn hàng không tồn tại')
+        const error = new Error('Đơn hàng không tồn tại!')
         error.status = 404
         throw error
     }
 
     if (order.TRANGTHAI !== 'Hoàn thành') {
-        const error = new Error('Chỉ có thể đánh giá sau khi giao dịch hoàn thành')
+        const error = new Error('Chỉ có thể đánh giá sau khi giao dịch hoàn thành!')
         error.status = 400
         throw error
     }
 
     if (order.NGUOIMUA !== nguoiDanhGia) {
-        const error = new Error('Chỉ người mua mới được đánh giá người bán')
+        const error = new Error('Chỉ người mua mới được đánh giá người bán!')
         error.status = 403
         throw error
     }
@@ -49,7 +49,7 @@ async function checkExistingReview(transaction, maDH, nguoiDanhGia) {
           AND NGUOIDANHGIA = @NGUOIDANHGIA`)
 
     if (result.recordset.length > 0) {
-        const error = new Error('Bạn đã đánh giá giao dịch này rồi')
+        const error = new Error('Bạn đã đánh giá giao dịch này rồi!')
         error.status = 409
         throw error
     }
