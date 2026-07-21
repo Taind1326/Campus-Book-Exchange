@@ -1,15 +1,12 @@
+require('dotenv').config()
 const http = require('http')
 const {Server} = require('socket.io')
-
-require('dotenv').config()
-
 const express = require('express')
 const {sql, connectDB} = require('./config/db')
 const {setIO} = require('./config/socket')
 const {initializeSocket} = require('./sockets/socketServer')
 const textBookRoutes = require('./routes/textbookRoutes')
 const authRoutes = require('./routes/authRoutes')
-const cloudinary = require('./config/cloudinary')
 const courseRoutes = require('./routes/courseRoutes')
 const orderRoutes = require('./routes/orderRoutes')
 const notificationRoutes = require('./routes/notificationRoutes')
@@ -34,7 +31,7 @@ setIO(io)
 
 initializeSocket(io)
 
-const PORT = 3000
+const PORT = Number(process.env.PORT || 3000)
 
 app.use(express.json())
 

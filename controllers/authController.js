@@ -1,117 +1,98 @@
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
+
 const {sql} = require('../config/db')
 
-const SALT_ROUNDS = 10
 
+const {
+    validateStudentInfo,
+    validateOtpRequest,
+    validateResendRequest,
+    validateAccountInfo
+} = require('../validators/authValidator')
+
+
+const {
+    registerStudent: registerStudentWorkflow,
+    verifyEmail: verifyEmailWorkflow,
+    resendVerification: resendVerificationWorkflow,
+    createVerifiedAccount: createVerifiedAccountWorkflow
+} = require('../services/authWorkflowService')
+
+function handleAuthError(res, error, action) {
+    console.log(`Lỗi ${action}:`, error)
+
+    if (error.statusCode) {
+        return res.status(error.statusCode).json({message: error.message})
+    }
+
+    if (error.number === 2601 || error.number === 2627) {
+        return res.status(409).json({message: 'Thông tin đăng ký đã được sử dụng!'})
+    }
+
+    return res.status(500).json({message: `Không thể ${action}!`})
+}
+
+// Bước 1: lưu hồ sơ sinh viên và gửi OTP
 async function register(req, res) {
-    const {MASV, TENSV, SDT, TENTK, MATKHAU} = req.body
-
-    if (!MASV || !TENSV || !SDT || !TENTK || !MATKHAU){
-        return res.status(400).json({message: 'Vui lòng nhập đầy đủ thông tin!'})
-    }
-
-    if (typeof MASV !== 'string' || typeof TENSV !== 'string' || typeof SDT !== 'string' || typeof TENTK !== 'string' || typeof MATKHAU !== 'string') {
-        return res.status(400).json({message: 'Dữ liệu đăng ký không hợp lệ!'})
-    }
-
-
-    const maSV = MASV.trim()
-    const tenSV = TENSV.trim()
-    const soDienThoai = SDT.trim()
-    const tenTaiKhoan = TENTK.trim().toLowerCase()
-
-    if (!/^\d{6,30}$/.test(maSV)){
-        return res.status(400).json({message: 'Mã sinh viên không hợp lệ!'})
-    }
-
-    if (tenSV.length < 3 || /\d/.test(tenSV)){
-        return res.status(400).json({message: 'Họ tên không được chứa số!'})
-    }
-
-    if (!/^0\d{9}$/.test(soDienThoai)){
-        return res.status(400).json({message: 'Số điện thoại phải đủ 10 chữ số và phải bắt đầu bằng số 0!'})
-    }
-
-    if (tenTaiKhoan.length < 3 || tenTaiKhoan.length > 50 || /\s/.test(tenTaiKhoan)){
-        return res.status(400).json({message: 'Tên tài khoản phải từ 3 đến 50 ký tự và không có khoảng trắng!'})
-    }
-
-    if (MATKHAU.length < 6){
-        return res.status(400).json({message: 'Mật khẩu phải có ít nhất 6 ký tự!'})
-    }
-
     try {
-        const existingResult = await sql.query`
-            SELECT 
-            CASE WHEN EXISTS (SELECT 1 FROM SINHVIEN WHERE MASV = ${maSV})
-            THEN 1 ELSE 0 END AS MASV_TONTAI,
-            
-            CASE WHEN EXISTS (SELECT 1 FROM SINHVIEN WHERE SDT = ${soDienThoai})
-            THEN 1 ELSE 0 END AS SDT_TONTAI,
-            
-            CASE WHEN EXISTS (SELECT 1 FROM TAIKHOAN WHERE TENTK = ${tenTaiKhoan})
-            THEN 1 ELSE 0 END AS TENTK_TONTAI`
+        const student = validateStudentInfo(req.body)
+        const registration = await registerStudentWorkflow(student)
 
-            const existingData = existingResult.recordset[0]
-
-            if (existingData.MASV_TONTAI === 1){
-                return res.status(409).json({message: 'Mã sinh viên đã được đăng ký!'})
-            }
-
-            if (existingData.SDT_TONTAI === 1){
-                return res.status(409).json({message: 'Số điện thoại đã được sử dụng!'})
-            }
-
-            if (existingData.TENTK_TONTAI === 1){
-                return res.status(409).json({message: 'Tên tài khoản đã tồn tại!'})
-            }
-
-            const matKhauHash = await bcrypt.hash(MATKHAU, SALT_ROUNDS)
-
-            const transaction = new sql.Transaction()
-            let transactionStarted = false
-
-            try {
-                await transaction.begin()
-
-                transactionStarted = true
-
-                const request = new sql.Request(transaction)
-
-                request.input('MASV', sql.VarChar(30), maSV)
-                request.input('TENSV', sql.NVarChar(300), tenSV)
-                request.input('SDT', sql.VarChar(10), soDienThoai)
-                request.input('TENTK', sql.VarChar(50), tenTaiKhoan)
-                request.input('MATKHAU_HASH', sql.VarChar(255), matKhauHash)
-
-                await request.query(`INSERT INTO SINHVIEN(MASV, TENSV, SDT)
-                                     VALUES (@MASV, @TENSV, @SDT);
-                                     
-                                     INSERT INTO TAIKHOAN(TENTK, MATKHAU_HASH, MASV)
-                                     VALUES (@TENTK, @MATKHAU_HASH, @MASV);`)
-
-                await transaction.commit()
-
-                return res.status(201).json({message: 'Đăng ký tài khoản thành công!'})
-            }
-
-            catch(error){
-                if (transactionStarted){
-                    await transaction.rollback()
-                }
-                throw error
-            }
+        return res.status(201).json({message: 'Đã gửi OTP đến email. ' + 'Vui lòng xác minh để tiếp tục!', registration})
     }
 
-    catch(error){
-        console.log('Lỗi đăng ký: ',error)
+    catch (error) {
+        return handleAuthError(res, error, 'đăng ký')
+    }
+}
 
-        if (error.number === 2601 || error.number === 2627){
-            return res.status(409).json({message: 'Mã sinh viên, số điện thoại hoặc tên tài khoản đã tồn tại!'})
-        }
 
-        return res.status(500).json({message: 'Không thể đăng ký tài khoản!'})
+// Bước 2: xác minh OTP
+async function verifyEmailOtp(req, res) {
+    try {
+        const data = validateOtpRequest(req.body)
+        const result = await verifyEmailWorkflow(data)
+
+        return res.status(200).json({message: 'Xác minh email thành công! ' + 'Vui lòng tạo tên tài khoản và mật khẩu.',
+            registrationToken:
+                result.registrationToken
+        })
+    }
+
+    catch (error) {
+        return handleAuthError(res, error, 'xác minh email')
+    }
+}
+
+
+// Gửi lại OTP
+async function resendEmailOtp(req, res) {
+    try {
+        const data = validateResendRequest(req.body)
+
+        await resendVerificationWorkflow(data)
+
+        return res.status(200).json({message: 'Đã gửi lại OTP đến email!'})
+    }
+
+    catch (error) {
+        return handleAuthError(res, error, 'gửi lại OTP')
+    }
+}
+
+
+// Bước 3: tạo tên tài khoản và mật khẩu
+async function createAccount(req, res) {
+    try {
+        const data = validateAccountInfo(req.body)
+        const account = await createVerifiedAccountWorkflow(data)
+
+        return res.status(201).json({message: 'Tạo tài khoản thành công! ' + 'Bạn có thể đăng nhập.', account})
+    }
+
+    catch (error) {
+        return handleAuthError(res, error, 'tạo tài khoản')
     }
 }
 
@@ -119,82 +100,105 @@ async function register(req, res) {
 async function login(req, res) {
     const {TENTK, MATKHAU, GHI_NHO = false} = req.body
 
-    if (!TENTK || !MATKHAU){
-        return res.status(400).json({message: 'Vui lòng nhập tên tài khoản và mật khẩu!'})
-    }
-
-    if (typeof TENTK !== 'string' || typeof MATKHAU !== 'string' || typeof GHI_NHO !== 'boolean'){
+    if (typeof TENTK !== 'string' || typeof MATKHAU !== 'string' || typeof GHI_NHO !== 'boolean') {
         return res.status(400).json({message: 'Dữ liệu đăng nhập không hợp lệ!'})
     }
 
-    const tenTaiKhoan = TENTK.trim().toLowerCase()
+    const tenTaiKhoan = TENTK.trim()
 
-    if (!tenTaiKhoan){
-        return res.status(400).json({message: 'Tên tài khoản không được để trống!'})
+    if (!tenTaiKhoan || !MATKHAU) {
+        return res.status(400).json({ message: 'Vui lòng nhập tên tài khoản và mật khẩu!'})
     }
+
+    const normalizedUsername = tenTaiKhoan.toLowerCase()
 
     try {
         const result = await sql.query`
-            SELECT TK.MATK, TK.TENTK, TK.MATKHAU_HASH,
-                    TK.VAITRO, TK.TRANGTHAI, TK.LYDOHANCHED,
-                    TK.HANCHEDEN, SV.MASV, SV.TENSV, SV.SDT
-                
+            SELECT TK.MATK, TK.TENTK, TK.MATKHAU_HASH, TK.VAITRO, TK.TRANGTHAI, TK.LYDOHANCHED, TK.HANCHEDEN,
+                    SV.MASV, SV.EMAIL, SV.TENSV, SV.SDT
             FROM TAIKHOAN TK
             JOIN SINHVIEN SV ON TK.MASV = SV.MASV
-            WHERE TK.TENTK = ${tenTaiKhoan}`
+            WHERE TK.TENTK = ${normalizedUsername}`
 
-        if (result.recordset.length === 0){
+        if (result.recordset.length === 0) {
             return res.status(401).json({message: 'Tên tài khoản hoặc mật khẩu không chính xác!'})
         }
 
         const taiKhoan = result.recordset[0]
+        const matKhauDung = await bcrypt.compare(MATKHAU, taiKhoan.MATKHAU_HASH)
 
-        if (taiKhoan.TRANGTHAI === 'Tạm khóa'){
+        if (!matKhauDung) {
+            return res.status(401).json({message: 'Tên tài khoản hoặc mật khẩu không chính xác!' })
+        }
+
+        if ((taiKhoan.TRANGTHAI === 'Bị hạn chế' || taiKhoan.TRANGTHAI === 'Tạm khóa') &&
+            taiKhoan.HANCHEDEN && new Date(taiKhoan.HANCHEDEN).getTime() <= Date.now()) {
+            await sql.query`
+                UPDATE TAIKHOAN
+                SET TRANGTHAI = N'Hoạt động',
+                    LYDOHANCHED = NULL,
+                    HANCHEDEN = NULL
+                WHERE MATK = ${taiKhoan.MATK}`
+
+            taiKhoan.TRANGTHAI = 'Hoạt động'
+            taiKhoan.LYDOHANCHED = null
+            taiKhoan.HANCHEDEN = null
+        }
+
+        if (taiKhoan.TRANGTHAI === 'Tạm khóa') {
             return res.status(403).json({message: 'Tài khoản đang tạm bị khóa!'})
         }
 
-        if (taiKhoan.TRANGTHAI === 'Đã khóa'){
+        if (taiKhoan.TRANGTHAI === 'Đã khóa') {
             return res.status(403).json({message: 'Tài khoản đã bị khóa!'})
         }
 
-        const matKhauDung = await bcrypt.compare(MATKHAU, taiKhoan.MATKHAU_HASH)
+        const thoiHanToken =
+            GHI_NHO
+                ? (
+                    process.env
+                        .JWT_REMEMBER_EXPIRES_IN || '30d'
+                )
+                : (
+                    process.env.JWT_EXPIRES_IN || '2h'
+                )
 
-        if (!matKhauDung){
-            return res.status(401).json({message: 'Tên tài khoản hoặc mật khẩu không chính xác!'})
-        }
+        const token = jwt.sign(
+            {
+                MATK: taiKhoan.MATK,
+                TENTK: taiKhoan.TENTK,
+                VAITRO: taiKhoan.VAITRO
+            },
 
-        const thoiHanToken = GHI_NHO ? process.env.JWT_REMEMBER_EXPIRES_IN
-                                     : process.env.JWT_EXPIRES_IN
-                                    
-        const token = jwt.sign({
-            MATK: taiKhoan.MATK,
-            TENTK: taiKhoan.TENTK,
-            VAITRO: taiKhoan.VAITRO
-        }, 
-        
-        process.env.JWT_SECRET,
-        {
-            expiresIn: thoiHanToken
-        }
-    )
+            process.env.JWT_SECRET,
 
-    await sql.query`
-        UPDATE TAIKHOAN
-        SET LANCUOIDANGNHAP = SYSDATETIME()
-        WHERE MATK = ${taiKhoan.MATK}`
+            {
+                expiresIn: thoiHanToken
+            }
+        )
 
-    return res.status(200).json({message: 'Đăng nhập thành công!', token, user: {
-        MATK: taiKhoan.MATK,
-        MASV: taiKhoan.MASV,
-        TENSV: taiKhoan.TENSV,
-        TENTK: taiKhoan.TENTK,
-        SDT: taiKhoan.SDT,
-        VAITRO: taiKhoan.VAITRO,
-        TRANGTHAI: taiKhoan.TRANGTHAI}})
+        await sql.query`
+            UPDATE TAIKHOAN
+            SET LANCUOIDANGNHAP = SYSDATETIME()
+            WHERE MATK = ${taiKhoan.MATK}`
+
+        return res.status(200).json({
+            message: 'Đăng nhập thành công!', token, user: {
+                MATK: taiKhoan.MATK,
+                MASV: taiKhoan.MASV,
+                EMAIL: taiKhoan.EMAIL,
+                TENSV: taiKhoan.TENSV,
+                TENTK: taiKhoan.TENTK,
+                SDT: taiKhoan.SDT,
+                VAITRO: taiKhoan.VAITRO,
+                TRANGTHAI: taiKhoan.TRANGTHAI
+            }
+        })
     }
 
-    catch(error){
+    catch (error) {
         console.log('Lỗi đăng nhập!', error)
+
         return res.status(500).json({message: 'Không thể đăng nhập!'})
     }
 }
@@ -203,22 +207,20 @@ async function login(req, res) {
 async function getCurrentUser(req, res) {
     try {
         const result = await sql.query`
-            SELECT TK.MATK, TK.TENTK, TK.VAITRO, TK.TRANGTHAI,
-                    TK.LYDOHANCHED, TK.HANCHEDEN, TK.NGAYTAO,
-                    TK.LANCUOIDANGNHAP, SV.MASV, SV.TENSV, SV.SDT
-                    
+            SELECT TK.MATK, TK.TENTK, TK.VAITRO, TK.TRANGTHAI, TK.LYDOHANCHED, TK.HANCHEDEN,
+                    TK.NGAYTAO, TK.LANCUOIDANGNHAP, SV.MASV, SV.EMAIL, SV.TENSV, SV.SDT, SV.NGAYXACMINHEMAIL
             FROM TAIKHOAN TK
             JOIN SINHVIEN SV ON TK.MASV = SV.MASV
             WHERE TK.MATK = ${req.user.MATK}`
 
-        if (result.recordset.length === 0){
+        if (result.recordset.length === 0) {
             return res.status(404).json({message: 'Không tìm thấy thông tin tài khoản!'})
         }
 
-        return res.status(200).json({user: result.recordset[0]})
+        return res.status(200).json({ user: result.recordset[0]})
     }
 
-    catch(error){
+    catch (error) {
         console.log('Lỗi lấy thông tin tài khoản!', error)
 
         return res.status(500).json({message: 'Không thể lấy thông tin tài khoản!'})
@@ -226,4 +228,11 @@ async function getCurrentUser(req, res) {
 }
 
 
-module.exports = {register, login, getCurrentUser}
+module.exports = {
+    register, 
+    verifyEmailOtp,
+    resendEmailOtp,
+    createAccount,
+    login, 
+    getCurrentUser
+}
