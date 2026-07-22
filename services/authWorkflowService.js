@@ -114,8 +114,7 @@ async function registerStudent(student) {
 
     throw businessError(
         503,
-        'Hồ sơ đã được lưu nhưng chưa gửi được email. ' +
-        'Vui lòng sử dụng chức năng gửi lại OTP!'
+        'Chưa gửi được OTP. Vui lòng thử gửi lại sau!'
     )
 }
 
@@ -138,8 +137,7 @@ async function resendVerification(data) {
     const latestOtp = await getLatestActiveOtpService(data.maSV)
 
     if (latestOtp) {
-        const lastSendTime = new Date(latestOtp.NGAYGUI).getTime()
-        const secondsSinceLastSend = (Date.now() - lastSendTime) / 1000
+        const secondsSinceLastSend = Number(latestOtp.SOGIAYTULANGUI)
 
         if (secondsSinceLastSend < RESEND_WAIT_SECONDS) {
             const remainingSeconds = Math.ceil(RESEND_WAIT_SECONDS - secondsSinceLastSend)
@@ -190,8 +188,19 @@ async function resendVerification(data) {
     }
 
     catch (error) {
-        throw businessError(503, 'Chưa gửi được OTP. ' + 'Vui lòng thử gửi lại sau!')
-    }
+    console.error('Lỗi SMTP gửi lại OTP:', {
+        message: error.message,
+        code: error.code,
+        command: error.command,
+        response: error.response,
+        responseCode: error.responseCode
+    })
+
+    throw businessError(
+        503,
+        'Chưa gửi được OTP. Vui lòng thử gửi lại sau!'
+    )
+}
 
     return true
 }
@@ -206,11 +215,9 @@ async function verifyEmail(data) {
         throw businessError(400, 'Mã OTP không tồn tại hoặc đã hết hiệu lực!')
     }
 
-    const expirationTime = new Date(verification.HETHAN).getTime()
-
-    if (expirationTime <= Date.now()) {
+   if (Number(verification.CONHIEULUC) !== 1) {
         throw businessError(400, 'Mã OTP đã hết hạn!')
-    }
+}
 
     const otpIsCorrect = await bcrypt.compare(data.otp, verification.MAOTP_HASH)
 

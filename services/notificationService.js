@@ -38,6 +38,35 @@ async function createOrderNotification(transaction, textbook, maDH, maCuoc) {
 }
 
 
+async function createOrderConfirmedNotification(transaction, order) {
+    return insertNotification(transaction, {
+        nguoiNhan: order.NGUOIMUA,
+        tieuDe: 'Yêu cầu giao dịch đã được xác nhận',
+        noiDung:
+            `Người bán đã xác nhận yêu cầu giao dịch ` +
+            `giáo trình "${order.TENGT}".`,
+        loai: 'Đơn hàng',
+        maDH: order.MADH,
+        maGT: order.MAGT,
+        duongDan: `/orders/${order.MADH}`
+    })
+}
+
+
+async function createOrderRejectedNotification(transaction, rejectedOrder, tenGT) {
+    return insertNotification(transaction, {
+        nguoiNhan: rejectedOrder.NGUOIMUA,
+        tieuDe: 'Yêu cầu giao dịch không còn đủ số lượng',
+        noiDung:
+            `Yêu cầu giao dịch giáo trình "${tenGT}" ` +
+            `đã bị từ chối vì số lượng còn lại không đủ.`,
+        loai: 'Đơn hàng',
+        maDH: rejectedOrder.MADH,
+        maGT: rejectedOrder.MAGT,
+        duongDan: `/orders/${rejectedOrder.MADH}`
+    })
+}
+
 
 async function getNotifications(nguoiNhan) {
     const request = new sql.Request()
@@ -151,7 +180,9 @@ async function createReviewNotification(transaction, review, order){
 
 module.exports = {
     insertNotification,
-    createOrderNotification, 
+    createOrderNotification,
+    createOrderConfirmedNotification,
+    createOrderRejectedNotification,
     getNotifications,
     getNotificationById,
     markNotificationAsRead,

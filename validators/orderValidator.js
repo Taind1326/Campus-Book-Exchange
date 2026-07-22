@@ -26,4 +26,41 @@ function validateCreateOrder(body){
     return {isValid: true, data}
 }
 
-module.exports = {validateCreateOrder}
+
+function validateOrderId(value) {
+    if (value === undefined || value === null || value === '') {
+        return {isValid: false, status: 400, message: 'Thiếu mã đơn hàng!'}
+    }
+
+    const maDH = Number(value)
+
+    if (!Number.isInteger(maDH) || maDH <= 0) {
+        return {isValid: false, status: 400, message: 'Mã đơn hàng không hợp lệ!'}
+    }
+
+    return {isValid: true, data: {maDH}}
+}
+
+
+function validateOrderListQuery(query) {
+    const page = query.page === undefined ? 1 : Number(query.page)
+    const limit = query.limit === undefined ? 20 : Number(query.limit)
+
+    if (!Number.isInteger(page) || page <= 0) {
+        return {isValid: false, status: 400, message: 'Trang không hợp lệ!'}
+    }
+
+    if (!Number.isInteger(limit) || limit <= 0 || limit > 100) {
+        return {isValid: false, status: 400, message: 'Số dòng mỗi trang phải từ 1 đến 100!'}
+    }
+
+    return {
+        isValid: true,
+        data: {
+            page,
+            limit
+        }
+    }
+}
+
+module.exports = {validateCreateOrder, validateOrderId, validateOrderListQuery}

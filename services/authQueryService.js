@@ -90,16 +90,21 @@ async function getLatestActiveOtp(maSV) {
     request.input('MASV', sql.VarChar(30), maSV)
 
     const result = await request.query(`
-        SELECT TOP (1) MAXACMINH, MASV, MAOTP_HASH,
-                SOLANSAI, NGAYGUI, HETHAN
+        SELECT TOP (1) MAXACMINH, MASV, MAOTP_HASH, SOLANSAI, NGAYGUI, HETHAN,
+                DATEDIFF(SECOND, NGAYGUI, SYSDATETIME()) AS SOGIAYTULANGUI,
+
+                CASE WHEN HETHAN > SYSDATETIME()
+                    THEN 1 ELSE 0
+                END AS CONHIEULUC
+
         FROM XACMINHEMAIL
         WHERE MASV = @MASV
             AND TRANGTHAI = N'Còn hiệu lực'
+
         ORDER BY NGAYGUI DESC`)
 
     return result.recordset[0] || null
 }
-
 
 
 // Lấy hồ sơ đăng ký của sinh viên
