@@ -347,6 +347,43 @@ async function getOrderDetail(maDH, nguoiDung) {
 }
 
 
+function validateOrderRejection(order, nguoiBan) {
+    if (order.NGUOIBAN !== nguoiBan) {
+        const error = new Error('Bạn không có quyền từ chối đơn hàng này!')
+        error.status = 403
+        throw error
+    }
+
+    if (order.TRANGTHAI !== 'Đang trao đổi') {
+        const error = new Error('Chỉ có thể từ chối đơn đang trao đổi!')
+        error.status = 409
+        throw error
+    }
+}
+
+
+
+async function rejectOrder(transaction, maDH) {
+    const request = new sql.Request(transaction)
+
+    request.input('MADH', sql.Int, maDH)
+
+    const result = await request.query(`
+        UPDATE DONHANG
+        SET TRANGTHAI = N'Bị từ chối',
+            NGAYCAPNHAT = SYSDATETIME()
+
+        WHERE MADH = @MADH
+          AND TRANGTHAI = N'Đang trao đổi'`)
+
+    if (result.rowsAffected[0] !== 1) {
+        const error = new Error('Đơn hàng đã được xử lý trước đó!')
+        error.status = 409
+        throw error
+    }
+}
+
+
 module.exports = {
     validateOrder, 
     checkExistingActiveOrder, 
@@ -359,5 +396,7 @@ module.exports = {
     confirmOrderAndHoldQuantity,
     rejectOrdersExceedingAvailableQuantity,
     getOrdersByUser,
-    getOrderDetail
+    getOrderDetail,
+    validateOrderRejection,
+    rejectOrder
 }

@@ -3,7 +3,8 @@ const {
     confirmOrder: confirmOrderWorkflow,
     getBuyingOrders: getBuyingOrdersWorkflow,
     getSellingOrders: getSellingOrdersWorkflow,
-    getOrderDetail: getOrderDetailWorkflow
+    getOrderDetail: getOrderDetailWorkflow,
+    rejectOrder: rejectOrderWorkflow
 } = require('../services/orderWorkflowService')
 
 const {
@@ -122,10 +123,31 @@ async function getOrderDetail(req, res) {
     }
 }
 
+
+async function rejectOrder(req, res) {
+    const validation = validateOrderId(req.params.maDH)
+
+    if (!validation.isValid) {
+        return res.status(validation.status).json({message: validation.message})
+    }
+
+    try {
+        const order = await rejectOrderWorkflow(validation.data.maDH, req.user.MATK)
+
+        return res.status(200).json({message: 'Từ chối yêu cầu giao dịch thành công!', order})
+    }
+
+    catch (error) {
+        return handleOrderError(res, error, 'từ chối yêu cầu giao dịch')
+    }
+}
+
+
 module.exports = {
     createOrder,
     confirmOrder,
     getBuyingOrders,
     getSellingOrders,
-    getOrderDetail
+    getOrderDetail,
+    rejectOrder
 }

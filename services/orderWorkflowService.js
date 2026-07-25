@@ -13,7 +13,9 @@ const {
     confirmOrderAndHoldQuantity: confirmOrderAndHoldQuantityService,
     rejectOrdersExceedingAvailableQuantity: rejectOrdersExceedingAvailableQuantityService,
     getOrdersByUser: getOrdersByUserService,
-    getOrderDetail: getOrderDetailService
+    getOrderDetail: getOrderDetailService,
+    validateOrderRejection: validateOrderRejectionService,
+    rejectOrder: rejectOrderService
 } = require('./orderService')
 
 const {
@@ -23,7 +25,8 @@ const {
 const {
     createOrderNotification: createOrderNotificationService,
     createOrderConfirmedNotification: createOrderConfirmedNotificationService,
-    createOrderRejectedNotification: createOrderRejectedNotificationService
+    createOrderRejectedNotification: createOrderRejectedNotificationService,
+    createOrderManuallyRejectedNotification: createOrderManuallyRejectedNotificationService
 } = require('./notificationService')
 
 async function createOrder(data, nguoiMua) {
@@ -175,10 +178,66 @@ async function getOrderDetail(maDH, nguoiDung) {
 }
 
 
+async function rejectOrder(maDH, nguoiBan) {
+    const transaction = new sql.Transaction()
+    let transactionStarted = false
+
+    try {
+        await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE)
+
+        transactionStarted = true
+
+        const order = await getOrderForConfirmationWithLockService(transaction, maDH)
+
+        validateOrderRejectionService(order, nguoiBan)
+
+        await rejectOrderService(transaction, order.MADH)
+
+        const notification = await createOrderManuallyRejectedNotificationService(transaction, order)
+
+        await transaction.commit()
+        transactionStarted = false
+
+        try {
+            const io = getIO()
+
+            io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
+        }
+
+        catch (socketError) {
+            console.error('Lỗi gửi realtime từ chối đơn:', socketError)
+        }
+
+        return {
+            maDH: order.MADH,
+            maGT: order.MAGT,
+            tenGT: order.TENGT,
+            nguoiMua: order.NGUOIMUA,
+            trangThai: 'Bị từ chối'
+        }
+    }
+
+    catch (error) {
+        if (transactionStarted) {
+            try {
+                await transaction.rollback()
+            }
+
+            catch (rollbackError) {
+                console.log('Lỗi rollback từ chối đơn:', rollbackError)
+            }
+        }
+
+        throw error
+    }
+}
+
+
 module.exports = {
     createOrder, 
     confirmOrder, 
     getBuyingOrders, 
     getSellingOrders,
-    getOrderDetail
+    getOrderDetail,
+    rejectOrder
 }

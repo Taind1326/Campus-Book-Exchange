@@ -178,6 +178,20 @@ async function createReviewNotification(transaction, review, order){
 }
 
 
+async function createOrderManuallyRejectedNotification(transaction, order) {
+    return insertNotification(transaction, {
+        nguoiNhan: order.NGUOIMUA,
+        tieuDe: 'Yêu cầu giao dịch đã bị từ chối',
+        noiDung:
+            `Người bán đã từ chối yêu cầu giao dịch ` +
+            `giáo trình "${order.TENGT}".`,
+        loai: 'Đơn hàng',
+        maDH: order.MADH,
+        maGT: order.MAGT,
+        duongDan: `/orders/${order.MADH}`})
+}
+
+
 module.exports = {
     insertNotification,
     createOrderNotification,
@@ -188,5 +202,6 @@ module.exports = {
     markNotificationAsRead,
     markAllNotificationsAsRead,
     getUnreadNotificationCount,
-    createReviewNotification
+    createReviewNotification,
+    createOrderManuallyRejectedNotification
 }
