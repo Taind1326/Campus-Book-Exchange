@@ -2,7 +2,8 @@ const {
     createOrder: createOrderWorkflow,
     confirmOrder: confirmOrderWorkflow,
     getBuyingOrders: getBuyingOrdersWorkflow,
-    getSellingOrders: getSellingOrdersWorkflow
+    getSellingOrders: getSellingOrdersWorkflow,
+    getOrderDetail: getOrderDetailWorkflow
 } = require('../services/orderWorkflowService')
 
 const {
@@ -103,9 +104,28 @@ async function getSellingOrders(req, res) {
 }
 
 
+async function getOrderDetail(req, res) {
+    const validation = validateOrderId(req.params.maDH)
+
+    if (!validation.isValid) {
+        return res.status(validation.status).json({message: validation.message})
+    }
+
+    try {
+        const order = await getOrderDetailWorkflow(validation.data.maDH, req.user.MATK)
+
+        return res.status(200).json({order})
+    }
+
+    catch (error) {
+        return handleOrderError(res, error,'lấy chi tiết đơn hàng')
+    }
+}
+
 module.exports = {
     createOrder,
     confirmOrder,
     getBuyingOrders,
-    getSellingOrders
+    getSellingOrders,
+    getOrderDetail
 }

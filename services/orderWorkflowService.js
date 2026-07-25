@@ -12,7 +12,8 @@ const {
     validateOrderConfirmation: validateOrderConfirmationService,
     confirmOrderAndHoldQuantity: confirmOrderAndHoldQuantityService,
     rejectOrdersExceedingAvailableQuantity: rejectOrdersExceedingAvailableQuantityService,
-    getOrdersByUser: getOrdersByUserService
+    getOrdersByUser: getOrdersByUserService,
+    getOrderDetail: getOrderDetailService
 } = require('./orderService')
 
 const {
@@ -169,4 +170,15 @@ async function getSellingOrders(nguoiBan, page, limit) {
 }
 
 
-module.exports = {createOrder, confirmOrder, getBuyingOrders, getSellingOrders}
+async function getOrderDetail(maDH, nguoiDung) {
+    return getOrderDetailService(maDH, nguoiDung)
+}
+
+
+module.exports = {
+    createOrder, 
+    confirmOrder, 
+    getBuyingOrders, 
+    getSellingOrders,
+    getOrderDetail
+}

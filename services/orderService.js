@@ -314,6 +314,39 @@ async function getOrdersByUser(nguoiDung, role, page, limit) {
 }
 
 
+async function getOrderDetail(maDH, nguoiDung) {
+    const request = new sql.Request()
+
+    request.input('MADH', sql.Int, maDH)
+    request.input('NGUOIDUNG', sql.Int, nguoiDung)
+
+    const result = await request.query(`
+        SELECT DH.MADH, DH.NGUOIMUA,  DH.NGUOIBAN, DH.LOAIGIAODICH, DH.TRANGTHAI, DH.DIADIEMHEN,
+                DH.THOIGIANHEN, DH.NGAYNGUOIBANXACNHAN, DH.HANXACNHAN, DH.NGAYHOANTHANH, DH.NGAYTAO,
+                DH.NGAYCAPNHAT, CT.MAGT, CT.SOLUONG, CT.DONGIA, GT.TENGT, GT.LOAI, GT.TRANGTHAI AS TRANGTHAIGIAOTRINH,
+                TK_MUA.TENTK AS TENNGUOIMUA, TK_BAN.TENTK AS TENNGUOIBAN, C.MACUOC
+        FROM DONHANG DH
+        JOIN CHITIETDONHANG CT ON CT.MADH = DH.MADH
+        JOIN GIAOTRINH GT ON GT.MAGT = CT.MAGT
+        JOIN TAIKHOAN TK_MUA ON TK_MUA.MATK = DH.NGUOIMUA
+        JOIN TAIKHOAN TK_BAN ON TK_BAN.MATK = DH.NGUOIBAN
+        LEFT JOIN CUOCTROCHUYEN C ON C.MADH = DH.MADH
+        WHERE DH.MADH = @MADH
+          AND (
+              DH.NGUOIMUA = @NGUOIDUNG
+              OR DH.NGUOIBAN = @NGUOIDUNG
+          )`)
+
+    if (result.recordset.length === 0) {
+        const error = new Error('Không tìm thấy đơn hàng hoặc bạn không có quyền xem!')
+        error.status = 404
+        throw error
+    }
+
+    return result.recordset[0]
+}
+
+
 module.exports = {
     validateOrder, 
     checkExistingActiveOrder, 
@@ -325,5 +358,6 @@ module.exports = {
     validateOrderConfirmation,
     confirmOrderAndHoldQuantity,
     rejectOrdersExceedingAvailableQuantity,
-    getOrdersByUser
+    getOrdersByUser,
+    getOrderDetail
 }

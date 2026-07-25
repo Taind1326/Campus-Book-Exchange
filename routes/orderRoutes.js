@@ -4,7 +4,8 @@ const {
     createOrder,
     confirmOrder,
     getBuyingOrders,
-    getSellingOrders
+    getSellingOrders,
+    getOrderDetail
 } = require('../controllers/orderController')
 
 const {
@@ -15,6 +16,7 @@ const router = express.Router()
 
 router.get('/buying', authenticateToken, getBuyingOrders)
 router.get('/selling', authenticateToken, getSellingOrders)
+router.get('/:maDH', authenticateToken, getOrderDetail)
 
 router.post('/', authenticateToken, createOrder)
 
