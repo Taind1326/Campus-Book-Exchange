@@ -384,6 +384,86 @@ async function rejectOrder(transaction, maDH) {
 }
 
 
+
+function validateOrderCancellation(order, nguoiDung) {
+    const isParticipant = order.NGUOIMUA === nguoiDung || order.NGUOIBAN === nguoiDung
+
+    if (!isParticipant) {
+        const error = new Error('Bạn không có quyền hủy đơn hàng này!')
+        error.status = 403
+        throw error
+    }
+
+    const cancellableStatuses = [
+        'Đang trao đổi',
+        'Đã chốt',
+        'Chờ xác nhận'
+    ]
+
+    if (!cancellableStatuses.includes(order.TRANGTHAI)) {
+        const error = new Error('Đơn hàng ở trạng thái hiện tại không thể hủy!')
+        error.status = 409
+        throw error
+    }
+}
+
+
+
+async function cancelOrderAndReleaseQuantity(transaction, order) {
+    if (order.TRANGTHAI !== 'Đang trao đổi') {
+        const textbookRequest = new sql.Request(transaction)
+
+        textbookRequest.input('MAGT', sql.Int, order.MAGT)
+        textbookRequest.input('SOLUONG', sql.Int, order.SOLUONG)
+
+        const textbookResult = await textbookRequest.query(`
+                UPDATE GIAOTRINH
+                SET SOLUONGDANGGIU = SOLUONGDANGGIU - @SOLUONG,
+                    TRANGTHAI = CASE WHEN TRANGTHAI IN (
+                                N'Tạm ẩn',
+                                N'Đã xóa'
+                            )
+                                THEN TRANGTHAI
+
+                            WHEN SOLUONG = 0 THEN N'Hết hàng'
+                            WHEN SOLUONG - (SOLUONGDANGGIU -  @SOLUONG) > 0 THEN N'Đang hiển thị'
+
+                            ELSE N'Đang giao dịch'
+                        END,
+
+                    NGAYCAPNHAT = SYSDATETIME()
+
+                WHERE MAGT = @MAGT
+                  AND SOLUONGDANGGIU >= @SOLUONG`)
+
+        if (textbookResult.rowsAffected[0] !== 1) {
+            const error = new Error('Dữ liệu số lượng đang giữ không hợp lệ!')
+            error.status = 409
+            throw error
+        }
+    }
+
+    const orderRequest = new sql.Request(transaction)
+
+    orderRequest.input('MADH', sql.Int, order.MADH)
+    orderRequest.input('TRANGTHAICU', sql.NVarChar(50), order.TRANGTHAI)
+
+    const orderResult = await orderRequest.query(`
+        UPDATE DONHANG
+        SET TRANGTHAI = N'Đã hủy',
+            NGAYCAPNHAT = SYSDATETIME()
+
+        WHERE MADH = @MADH
+          AND TRANGTHAI = @TRANGTHAICU`)
+
+    if (orderResult.rowsAffected[0] !== 1) {
+        const error = new Error('Đơn hàng đã được xử lý trước đó!')
+        error.status = 409
+        throw error
+    }
+}
+
+
 module.exports = {
     validateOrder, 
     checkExistingActiveOrder, 
@@ -398,5 +478,7 @@ module.exports = {
     getOrdersByUser,
     getOrderDetail,
     validateOrderRejection,
-    rejectOrder
+    rejectOrder,
+    validateOrderCancellation,
+    cancelOrderAndReleaseQuantity
 }

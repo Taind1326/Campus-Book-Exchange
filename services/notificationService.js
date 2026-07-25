@@ -192,6 +192,24 @@ async function createOrderManuallyRejectedNotification(transaction, order) {
 }
 
 
+async function createOrderCancelledNotification(transaction, order, nguoiHuy) {
+    const nguoiNhan = nguoiHuy === order.NGUOIMUA ? order.NGUOIBAN : order.NGUOIMUA
+    const vaiTroNguoiHuy = nguoiHuy === order.NGUOIMUA ? 'Người mua' : 'Người bán'
+
+    return insertNotification(transaction, {
+        nguoiNhan,
+        tieuDe: 'Giao dịch đã bị hủy',
+        noiDung:
+            `${vaiTroNguoiHuy} đã hủy giao dịch ` +
+            `giáo trình "${order.TENGT}".`,
+        loai: 'Đơn hàng',
+        maDH: order.MADH,
+        maGT: order.MAGT,
+        duongDan: `/orders/${order.MADH}`
+    })
+}
+
+
 module.exports = {
     insertNotification,
     createOrderNotification,
@@ -203,5 +221,6 @@ module.exports = {
     markAllNotificationsAsRead,
     getUnreadNotificationCount,
     createReviewNotification,
-    createOrderManuallyRejectedNotification
+    createOrderManuallyRejectedNotification,
+    createOrderCancelledNotification
 }
