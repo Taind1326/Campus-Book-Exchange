@@ -46,7 +46,9 @@ async function checkExistingActiveOrder(transaction, maGT, nguoiMua) {
             AND DH.TRANGTHAI IN 
             (
                 N'Đang trao đổi',
-                N'Đã chốt'
+                N'Đã chốt',
+                N'Chờ xác nhận',
+                N'Tranh chấp'
             )`)
 
     if (result.recordset.length > 0){
@@ -464,6 +466,51 @@ async function cancelOrderAndReleaseQuantity(transaction, order) {
 }
 
 
+function validateOrderDelivery(order, nguoiBan) {
+    if (order.NGUOIBAN !== nguoiBan) {
+        const error = new Error('Bạn không có quyền xác nhận đã giao đơn hàng này!')
+        error.status = 403
+        throw error
+    }
+
+    if (order.TRANGTHAI !== 'Đã chốt') {
+        const error = new Error('Chỉ đơn đã chốt mới có thể xác nhận đã giao!')
+        error.status = 409
+        throw error
+    }
+}
+
+
+async function markOrderAsDelivered(transaction, maDH) {
+    const request = new sql.Request(transaction)
+
+    request.input('MADH', sql.Int, maDH)
+
+    const result = await request.query(`
+        DECLARE @THOIGIAN DATETIME2 = SYSDATETIME();
+
+        UPDATE DONHANG
+        SET TRANGTHAI = N'Chờ xác nhận',
+            NGAYNGUOIBANXACNHAN = @THOIGIAN,
+            HANXACNHAN = DATEADD(HOUR, 72, @THOIGIAN),
+            NGAYCAPNHAT = @THOIGIAN
+        OUTPUT
+            INSERTED.NGAYNGUOIBANXACNHAN,
+            INSERTED.HANXACNHAN
+        WHERE MADH = @MADH
+          AND TRANGTHAI = N'Đã chốt'`)
+
+    if (result.recordset.length === 0) {
+        const error = new Error('Đơn hàng đã được xử lý trước đó!')
+        error.status = 409
+        throw error
+    }
+
+    return result.recordset[0]
+}
+
+
+
 module.exports = {
     validateOrder, 
     checkExistingActiveOrder, 
@@ -480,5 +527,7 @@ module.exports = {
     validateOrderRejection,
     rejectOrder,
     validateOrderCancellation,
-    cancelOrderAndReleaseQuantity
+    cancelOrderAndReleaseQuantity,
+    validateOrderDelivery,
+    markOrderAsDelivered
 }

@@ -210,6 +210,21 @@ async function createOrderCancelledNotification(transaction, order, nguoiHuy) {
 }
 
 
+async function createOrderDeliveredNotification(transaction, order) {
+    return insertNotification(transaction, {
+        nguoiNhan: order.NGUOIMUA,
+        tieuDe: 'Người bán đã giao giáo trình',
+        noiDung:
+            `Người bán đã xác nhận giao giáo trình "${order.TENGT}". ` +
+            `Vui lòng xác nhận đã nhận hoặc báo có vấn đề trong vòng 72 giờ.`,
+        loai: 'Đơn hàng',
+        maDH: order.MADH,
+        maGT: order.MAGT,
+        duongDan: `/orders/${order.MADH}`
+    })
+}
+
+
 module.exports = {
     insertNotification,
     createOrderNotification,
@@ -222,5 +237,6 @@ module.exports = {
     getUnreadNotificationCount,
     createReviewNotification,
     createOrderManuallyRejectedNotification,
-    createOrderCancelledNotification
+    createOrderCancelledNotification,
+    createOrderDeliveredNotification
 }

@@ -17,7 +17,9 @@ const {
     validateOrderRejection: validateOrderRejectionService,
     rejectOrder: rejectOrderService,
     validateOrderCancellation: validateOrderCancellationService,
-    cancelOrderAndReleaseQuantity: cancelOrderAndReleaseQuantityService
+    cancelOrderAndReleaseQuantity: cancelOrderAndReleaseQuantityService,
+    validateOrderDelivery: validateOrderDeliveryService,
+    markOrderAsDelivered: markOrderAsDeliveredService
 } = require('./orderService')
 
 const {
@@ -29,7 +31,8 @@ const {
     createOrderConfirmedNotification: createOrderConfirmedNotificationService,
     createOrderRejectedNotification: createOrderRejectedNotificationService,
     createOrderManuallyRejectedNotification: createOrderManuallyRejectedNotificationService,
-    createOrderCancelledNotification: createOrderCancelledNotificationService
+    createOrderCancelledNotification: createOrderCancelledNotificationService,
+    createOrderDeliveredNotification: createOrderDeliveredNotificationService
 } = require('./notificationService')
 
 async function createOrder(data, nguoiMua) {
@@ -292,6 +295,64 @@ async function cancelOrder(maDH, nguoiDung) {
 }
 
 
+
+async function markOrderDelivered(maDH, nguoiBan) {
+    const transaction = new sql.Transaction()
+    let transactionStarted = false
+
+    try {
+        await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE)
+        transactionStarted = true
+
+        const order = await getOrderForConfirmationWithLockService(transaction, maDH)
+
+        validateOrderDeliveryService(order, nguoiBan)
+
+        const deliveryTime = await markOrderAsDeliveredService(transaction, order.MADH)
+        const notification = await createOrderDeliveredNotificationService(transaction, order)
+
+        await transaction.commit()
+        transactionStarted = false
+
+        try {
+            const io = getIO()
+
+            io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
+        }
+
+        catch (socketError) {
+            console.error('Lỗi gửi realtime xác nhận đã giao:', socketError)
+        }
+
+        return {
+            maDH: order.MADH,
+            maGT: order.MAGT,
+            tenGT: order.TENGT,
+            nguoiMua: order.NGUOIMUA,
+            trangThai: 'Chờ xác nhận',
+            ngayNguoiBanXacNhan:
+                deliveryTime.NGAYNGUOIBANXACNHAN,
+            hanXacNhan:
+                deliveryTime.HANXACNHAN
+        }
+    }
+
+    catch (error) {
+        if (transactionStarted) {
+            try {
+                await transaction.rollback()
+            }
+
+            catch (rollbackError) {
+                console.log('Lỗi rollback xác nhận đã giao:', rollbackError)
+            }
+        }
+
+        throw error
+    }
+}
+
+
 module.exports = {
     createOrder, 
     confirmOrder, 
@@ -299,5 +360,6 @@ module.exports = {
     getSellingOrders,
     getOrderDetail,
     rejectOrder,
-    cancelOrder
+    cancelOrder,
+    markOrderDelivered
 }
