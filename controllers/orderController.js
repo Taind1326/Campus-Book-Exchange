@@ -6,7 +6,8 @@ const {
     getOrderDetail: getOrderDetailWorkflow,
     rejectOrder: rejectOrderWorkflow,
     cancelOrder: cancelOrderWorkflow,
-    markOrderDelivered: markOrderDeliveredWorkflow
+    markOrderDelivered: markOrderDeliveredWorkflow,
+    confirmOrderReceived: confirmOrderReceivedWorkflow
 } = require('../services/orderWorkflowService')
 
 const {
@@ -185,6 +186,25 @@ async function markOrderDelivered(req, res) {
 }
 
 
+async function confirmOrderReceived(req, res) {
+    const validation = validateOrderId(req.params.maDH)
+
+    if (!validation.isValid) {
+        return res.status(validation.status).json({message: validation.message})
+    }
+
+    try {
+        const order = await confirmOrderReceivedWorkflow(validation.data.maDH, req.user.MATK)
+
+        return res.status(200).json({message: 'Xác nhận đã nhận giáo trình thành công!', order})
+    }
+
+    catch (error) {
+        return handleOrderError(res, error, 'xác nhận đã nhận giáo trình')
+    }
+}
+
+
 module.exports = {
     createOrder,
     confirmOrder,
@@ -193,5 +213,6 @@ module.exports = {
     getOrderDetail,
     rejectOrder,
     cancelOrder,
-    markOrderDelivered
+    markOrderDelivered,
+    confirmOrderReceived
 }

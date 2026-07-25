@@ -225,6 +225,22 @@ async function createOrderDeliveredNotification(transaction, order) {
 }
 
 
+async function createOrderCompletedNotification(transaction, order) {
+    return insertNotification(transaction, {
+        nguoiNhan: order.NGUOIBAN,
+        tieuDe: 'Giao dịch đã hoàn tất',
+        noiDung:
+            `Người mua đã xác nhận nhận giáo trình ` +
+            `"${order.TENGT}". Giao dịch đã hoàn tất.`,
+        loai: 'Đơn hàng',
+        maDH: order.MADH,
+        maGT: order.MAGT,
+        duongDan: `/orders/${order.MADH}`
+    })
+}
+
+
+
 module.exports = {
     insertNotification,
     createOrderNotification,
@@ -238,5 +254,6 @@ module.exports = {
     createReviewNotification,
     createOrderManuallyRejectedNotification,
     createOrderCancelledNotification,
-    createOrderDeliveredNotification
+    createOrderDeliveredNotification,
+    createOrderCompletedNotification
 }

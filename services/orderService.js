@@ -511,6 +511,76 @@ async function markOrderAsDelivered(transaction, maDH) {
 
 
 
+function validateOrderReceipt(order, nguoiMua) {
+    if (order.NGUOIMUA !== nguoiMua) {
+        const error = new Error('Bạn không có quyền xác nhận đã nhận đơn hàng này!')
+        error.status = 403
+        throw error
+    }
+
+    if (order.TRANGTHAI !== 'Chờ xác nhận') {
+        const error = new Error('Chỉ đơn đang chờ xác nhận mới có thể xác nhận đã nhận!')
+        error.status = 409
+        throw error
+    }
+}
+
+
+async function completeOrderAndDeductQuantity(transaction, order) {
+    const textbookRequest = new sql.Request(transaction)
+
+    textbookRequest.input('MAGT', sql.Int, order.MAGT)
+    textbookRequest.input('SOLUONG', sql.Int, order.SOLUONG)
+
+    const textbookResult = await textbookRequest.query(`
+        UPDATE GIAOTRINH
+        SET SOLUONG = SOLUONG - @SOLUONG,
+            SOLUONGDANGGIU = SOLUONGDANGGIU - @SOLUONG,
+
+            TRANGTHAI = CASE
+                WHEN TRANGTHAI IN (N'Tạm ẩn', N'Đã xóa') THEN TRANGTHAI
+                WHEN SOLUONG - @SOLUONG = 0 THEN N'Hết hàng'
+                WHEN (SOLUONG - @SOLUONG) - (SOLUONGDANGGIU - @SOLUONG) > 0 THEN N'Đang hiển thị'
+                ELSE N'Đang giao dịch'
+            END,
+
+            NGAYCAPNHAT = SYSDATETIME()
+
+        WHERE MAGT = @MAGT
+          AND SOLUONG >= @SOLUONG
+          AND SOLUONGDANGGIU >= @SOLUONG`)
+
+    if (textbookResult.rowsAffected[0] !== 1) {
+        const error = new Error('Dữ liệu số lượng giáo trình không hợp lệ!')
+        error.status = 409
+        throw error
+    }
+
+    const orderRequest = new sql.Request(transaction)
+
+    orderRequest.input('MADH', sql.Int, order.MADH)
+
+    const orderResult = await orderRequest.query(`
+        UPDATE DONHANG
+        SET TRANGTHAI = N'Hoàn tất',
+            NGAYHOANTHANH = SYSDATETIME(),
+            NGAYCAPNHAT = SYSDATETIME()
+
+        OUTPUT INSERTED.NGAYHOANTHANH
+
+        WHERE MADH = @MADH
+          AND TRANGTHAI = N'Chờ xác nhận'`)
+
+    if (orderResult.recordset.length === 0) {
+        const error = new Error('Đơn hàng đã được xử lý trước đó!')
+        error.status = 409
+        throw error
+    }
+
+    return orderResult.recordset[0]
+}
+
+
 module.exports = {
     validateOrder, 
     checkExistingActiveOrder, 
@@ -529,5 +599,7 @@ module.exports = {
     validateOrderCancellation,
     cancelOrderAndReleaseQuantity,
     validateOrderDelivery,
-    markOrderAsDelivered
+    markOrderAsDelivered,
+    validateOrderReceipt,
+    completeOrderAndDeductQuantity
 }

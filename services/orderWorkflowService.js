@@ -19,7 +19,9 @@ const {
     validateOrderCancellation: validateOrderCancellationService,
     cancelOrderAndReleaseQuantity: cancelOrderAndReleaseQuantityService,
     validateOrderDelivery: validateOrderDeliveryService,
-    markOrderAsDelivered: markOrderAsDeliveredService
+    markOrderAsDelivered: markOrderAsDeliveredService,
+    validateOrderReceipt: validateOrderReceiptService,
+    completeOrderAndDeductQuantity: completeOrderAndDeductQuantityService
 } = require('./orderService')
 
 const {
@@ -32,7 +34,8 @@ const {
     createOrderRejectedNotification: createOrderRejectedNotificationService,
     createOrderManuallyRejectedNotification: createOrderManuallyRejectedNotificationService,
     createOrderCancelledNotification: createOrderCancelledNotificationService,
-    createOrderDeliveredNotification: createOrderDeliveredNotificationService
+    createOrderDeliveredNotification: createOrderDeliveredNotificationService,
+    createOrderCompletedNotification: createOrderCompletedNotificationService
 } = require('./notificationService')
 
 async function createOrder(data, nguoiMua) {
@@ -353,6 +356,63 @@ async function markOrderDelivered(maDH, nguoiBan) {
 }
 
 
+async function confirmOrderReceived(maDH, nguoiMua) {
+    const transaction = new sql.Transaction()
+    let transactionStarted = false
+
+    try {
+        await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE)
+        transactionStarted = true
+
+        const order = await getOrderForConfirmationWithLockService(transaction, maDH)
+
+        validateOrderReceiptService(order, nguoiMua)
+
+        const completion = await completeOrderAndDeductQuantityService(transaction, order)
+        const notification = await createOrderCompletedNotificationService(transaction, order)
+
+        await transaction.commit()
+        transactionStarted = false
+
+        try {
+            const io = getIO()
+
+            io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
+        }
+
+        catch (socketError) {
+            console.error('Lỗi gửi realtime hoàn tất giao dịch:', socketError)
+        }
+
+        return {
+            maDH: order.MADH,
+            maGT: order.MAGT,
+            tenGT: order.TENGT,
+            nguoiBan: order.NGUOIBAN,
+            soLuong: order.SOLUONG,
+            trangThai: 'Hoàn tất',
+            ngayHoanThanh: completion.NGAYHOANTHANH,
+            soLuongConLai:
+                order.TONGSOLUONG - order.SOLUONG
+        }
+    }
+
+    catch (error) {
+        if (transactionStarted) {
+            try {
+                await transaction.rollback()
+            }
+
+            catch (rollbackError) {
+                console.log('Lỗi rollback xác nhận đã nhận:', rollbackError)
+            }
+        }
+
+        throw error
+    }
+}
+
+
 module.exports = {
     createOrder, 
     confirmOrder, 
@@ -361,5 +421,6 @@ module.exports = {
     getOrderDetail,
     rejectOrder,
     cancelOrder,
-    markOrderDelivered
+    markOrderDelivered,
+    confirmOrderReceived
 }

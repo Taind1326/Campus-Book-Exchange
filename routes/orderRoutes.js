@@ -8,7 +8,8 @@ const {
     getOrderDetail,
     rejectOrder,
     cancelOrder,
-    markOrderDelivered
+    markOrderDelivered,
+    confirmOrderReceived
 } = require('../controllers/orderController')
 
 const {
@@ -27,6 +28,7 @@ router.patch('/:maDH/confirm', authenticateToken, confirmOrder)
 router.patch('/:maDH/reject', authenticateToken, rejectOrder)
 router.patch('/:maDH/cancel', authenticateToken, cancelOrder)
 router.patch('/:maDH/delivered', authenticateToken, markOrderDelivered)
+router.patch('/:maDH/received', authenticateToken, confirmOrderReceived)
 
 
 module.exports = router
