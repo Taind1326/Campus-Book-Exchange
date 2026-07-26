@@ -7,7 +7,8 @@ const {
     rejectOrder: rejectOrderWorkflow,
     cancelOrder: cancelOrderWorkflow,
     markOrderDelivered: markOrderDeliveredWorkflow,
-    confirmOrderReceived: confirmOrderReceivedWorkflow
+    confirmOrderReceived: confirmOrderReceivedWorkflow,
+    reportOrderIssue: reportOrderIssueWorkflow
 } = require('../services/orderWorkflowService')
 
 const {
@@ -15,6 +16,10 @@ const {
     validateOrderId,
     validateOrderListQuery
 } = require('../validators/orderValidator')
+
+const {
+    validateCreateReport
+} = require('../validators/reportValidator')
 
 
 function handleOrderError(res, error, action) {
@@ -205,6 +210,26 @@ async function confirmOrderReceived(req, res) {
 }
 
 
+
+async function reportOrderIssue(req, res) {
+    const validation = validateCreateReport({...req.body, MADH: req.params.maDH})
+
+    if (!validation.isValid) {
+        return res.status(validation.status).json({message: validation.message})
+    }
+
+    try {
+        const order = await reportOrderIssueWorkflow(validation.data, req.user.MATK)
+
+        return res.status(200).json({message: 'Báo cáo vấn đề giao dịch thành công!', order})
+    }
+
+    catch (error) {
+        return handleOrderError(res, error, 'báo cáo vấn đề giao dịch')
+    }
+}
+
+
 module.exports = {
     createOrder,
     confirmOrder,
@@ -214,5 +239,6 @@ module.exports = {
     rejectOrder,
     cancelOrder,
     markOrderDelivered,
-    confirmOrderReceived
+    confirmOrderReceived,
+    reportOrderIssue
 }

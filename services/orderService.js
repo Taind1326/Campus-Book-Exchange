@@ -138,7 +138,8 @@ async function getOrderForConfirmationWithLock(transaction, maDH) {
     request.input('MADH', sql.Int, maDH)
 
     const result = await request.query(`
-        SELECT DH.MADH, DH.NGUOIMUA, DH.NGUOIBAN,
+        SELECT DH.MADH, DH.NGUOIMUA, DH.NGUOIBAN, DH.NGAYNGUOIBANXACNHAN,
+                DH.HANXACNHAN, DH.NGAYHOANTHANH,
                 DH.LOAIGIAODICH, DH.TRANGTHAI,
                 CT.MAGT, CT.SOLUONG, CT.DONGIA,
                 GT.TENGT, GT.NGUOIDANG,
@@ -398,8 +399,7 @@ function validateOrderCancellation(order, nguoiDung) {
 
     const cancellableStatuses = [
         'Đang trao đổi',
-        'Đã chốt',
-        'Chờ xác nhận'
+        'Đã chốt'
     ]
 
     if (!cancellableStatuses.includes(order.TRANGTHAI)) {
@@ -523,6 +523,18 @@ function validateOrderReceipt(order, nguoiMua) {
         error.status = 409
         throw error
     }
+
+    if (!order.NGAYNGUOIBANXACNHAN || !order.HANXACNHAN) {
+        const error = new Error('Dữ liệu thời hạn xác nhận của đơn hàng không hợp lệ!')
+        error.status = 409
+        throw error
+    }
+
+    if (new Date(order.HANXACNHAN).getTime() < Date.now()) {
+        const error = new Error('Đơn hàng đã hết thời hạn xác nhận!')
+        error.status = 409
+        throw error
+    }
 }
 
 
@@ -581,6 +593,49 @@ async function completeOrderAndDeductQuantity(transaction, order) {
 }
 
 
+function validateOrderIssue(order, nguoiMua) {
+    if (order.NGUOIMUA !== nguoiMua) {
+        const error = new Error('Chỉ người mua mới có quyền báo có vấn đề!')
+        error.status = 403
+        throw error
+    }
+
+    if (order.TRANGTHAI !== 'Chờ xác nhận') {
+        const error = new Error('Chỉ đơn đang chờ xác nhận mới có thể báo có vấn đề!')
+        error.status = 409
+        throw error
+    }
+
+    if (!order.NGAYNGUOIBANXACNHAN || !order.HANXACNHAN) {
+        const error = new Error('Dữ liệu thời hạn xác nhận của đơn hàng không hợp lệ!')
+        error.status = 409
+        throw error
+    }
+}
+
+
+async function markOrderAsDisputed(transaction, maDH) {
+    const request = new sql.Request(transaction)
+
+    request.input('MADH', sql.Int, maDH)
+
+    const result = await request.query(`
+        UPDATE DONHANG
+        SET TRANGTHAI = N'Tranh chấp',
+            NGAYCAPNHAT = SYSDATETIME()
+
+        WHERE MADH = @MADH
+          AND TRANGTHAI = N'Chờ xác nhận'
+          AND HANXACNHAN >= SYSDATETIME()`)
+
+    if (result.rowsAffected[0] !== 1) {
+        const error = new Error('Đã hết thời hạn báo có vấn đề hoặc đơn hàng đã được xử lý!')
+        error.status = 409
+        throw error
+    }
+}
+
+
 module.exports = {
     validateOrder, 
     checkExistingActiveOrder, 
@@ -601,5 +656,7 @@ module.exports = {
     validateOrderDelivery,
     markOrderAsDelivered,
     validateOrderReceipt,
-    completeOrderAndDeductQuantity
+    completeOrderAndDeductQuantity,
+    validateOrderIssue,
+    markOrderAsDisputed
 }

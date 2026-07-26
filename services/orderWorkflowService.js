@@ -21,7 +21,9 @@ const {
     validateOrderDelivery: validateOrderDeliveryService,
     markOrderAsDelivered: markOrderAsDeliveredService,
     validateOrderReceipt: validateOrderReceiptService,
-    completeOrderAndDeductQuantity: completeOrderAndDeductQuantityService
+    completeOrderAndDeductQuantity: completeOrderAndDeductQuantityService,
+    validateOrderIssue: validateOrderIssueService,
+    markOrderAsDisputed: markOrderAsDisputedService
 } = require('./orderService')
 
 const {
@@ -35,8 +37,15 @@ const {
     createOrderManuallyRejectedNotification: createOrderManuallyRejectedNotificationService,
     createOrderCancelledNotification: createOrderCancelledNotificationService,
     createOrderDeliveredNotification: createOrderDeliveredNotificationService,
-    createOrderCompletedNotification: createOrderCompletedNotificationService
+    createOrderCompletedNotification: createOrderCompletedNotificationService,
+    createOrderIssueNotification: createOrderIssueNotificationService
 } = require('./notificationService')
+
+const {
+    checkExistingReport: checkExistingReportService,
+    insertReport: insertReportService
+} = require('./reportService')
+
 
 async function createOrder(data, nguoiMua) {
     const transaction = new sql.Transaction()
@@ -413,6 +422,83 @@ async function confirmOrderReceived(maDH, nguoiMua) {
 }
 
 
+
+async function reportOrderIssue(data, nguoiMua) {
+    const transaction = new sql.Transaction()
+    let transactionStarted = false
+
+    try {
+        await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE)
+        transactionStarted = true
+
+        const order = await getOrderForConfirmationWithLockService(transaction, data.maDH)
+
+        validateOrderIssueService(order, nguoiMua)
+
+        await checkExistingReportService(transaction, order.MADH, nguoiMua)
+
+        const report = await insertReportService(
+            transaction,
+            nguoiMua,
+            order.NGUOIBAN,
+            {
+                maDH: order.MADH,
+                loaiBaoCao: data.loaiBaoCao,
+                noiDung: data.noiDung,
+                minhChung: data.minhChung
+            }
+        )
+
+        await markOrderAsDisputedService(transaction, order.MADH)
+
+        const notification =  await createOrderIssueNotificationService(transaction, order, report)
+
+        await transaction.commit()
+        transactionStarted = false
+
+        try {
+            const io = getIO()
+
+            io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
+        }
+
+        catch (socketError) {
+            console.error('Lỗi gửi realtime báo có vấn đề:', socketError)
+        }
+
+        return {
+            maDH: order.MADH,
+            maGT: order.MAGT,
+            tenGT: order.TENGT,
+            nguoiBan: order.NGUOIBAN,
+            trangThai: 'Tranh chấp',
+            baoCao: {
+                maBC: report.MABC,
+                loaiBaoCao: report.LOAIBAOCAO,
+                noiDung: report.NOIDUNG,
+                minhChung: report.MINHCHUNG,
+                trangThai: report.TRANGTHAI,
+                ngayBaoCao: report.NGAYBAOCAO
+            }
+        }
+    }
+
+    catch (error) {
+        if (transactionStarted) {
+            try {
+                await transaction.rollback()
+            }
+
+            catch (rollbackError) {
+                console.log('Lỗi rollback báo có vấn đề:', rollbackError)
+            }
+        }
+
+        throw error
+    }
+}
+
+
 module.exports = {
     createOrder, 
     confirmOrder, 
@@ -422,5 +508,6 @@ module.exports = {
     rejectOrder,
     cancelOrder,
     markOrderDelivered,
-    confirmOrderReceived
+    confirmOrderReceived,
+    reportOrderIssue
 }
