@@ -1,97 +1,70 @@
 function validateCreateReport(body) {
-    const maDH = Number(body.maDH)
-    const maTN = body.maTN === undefined || body.maTN === null || body.maTN === '' ? null : Number(body.maTN)
+    const { MADH, LOAIBAOCAO, NOIDUNG, MINHCHUNG} = body
 
-    const loaiBaoCao = body.loaiBaoCao
-    const noiDung = body.noiDung
-    const minhChung = body.minhChung
-
-    if (body.maDH === undefined || body.maDH === null || body.maDH === '') {
+    if (MADH === undefined || MADH === null || MADH === '') {
         return {isValid: false, status: 400, message: 'Mã đơn hàng là bắt buộc!'}
     }
+
+    const maDH = Number(MADH)
 
     if (!Number.isInteger(maDH) || maDH <= 0) {
         return {isValid: false, status: 400, message: 'Mã đơn hàng không hợp lệ!'}
     }
 
-    if (body.maTN !== undefined && body.maTN !== null && body.maTN !== '') {
-        if (!Number.isInteger(maTN) || maTN <= 0) {
-            return {isValid: false, status: 400, message: 'Mã tin nhắn không hợp lệ!'}
-        }
+    if (LOAIBAOCAO === undefined || LOAIBAOCAO === null || typeof LOAIBAOCAO !== 'string' || !LOAIBAOCAO.trim()) {
+        return {isValid: false, status: 400,  message: 'Loại báo cáo là bắt buộc!'}
     }
 
-     if (loaiBaoCao === undefined || loaiBaoCao === null) {
-        return {isValid: false, status: 400, message: 'Loại báo cáo là bắt buộc!'}
-    }
-
-    if (typeof loaiBaoCao !== 'string') {
-        return {isValid: false, status: 400, message: 'Loại báo cáo phải là chuỗi!'}
-    }
-
-    const loaiBaoCaoDaXuLy = loaiBaoCao.trim()
-
-    if (!loaiBaoCaoDaXuLy) {
-        return {isValid: false, status: 400, message: 'Loại báo cáo là bắt buộc!'}
-    }
+    const loaiBaoCao = LOAIBAOCAO.trim()
 
     const danhSachLoaiBaoCao = [
         'Lừa đảo',
-        'Quấy rối',
-        'Nội dung không phù hợp',
-        'Giáo trình không đúng mô tả',
-        'Không thực hiện giao dịch',
+        'Không đến điểm hẹn',
+        'Sách không đúng mô tả',
+        'Phá giao dịch',
         'Khác'
     ]
 
-    if (!danhSachLoaiBaoCao.includes(loaiBaoCaoDaXuLy)) {
-        return { isValid: false, status: 400, message: 'Loại báo cáo không hợp lệ!' }
+    if (!danhSachLoaiBaoCao.includes(loaiBaoCao)) {
+        return {isValid: false, status: 400, message: 'Loại báo cáo giao dịch không hợp lệ!'}
     }
 
-    if (noiDung === undefined || noiDung === null) {
+    if (NOIDUNG === undefined || NOIDUNG === null || typeof NOIDUNG !== 'string' || !NOIDUNG.trim()) {
         return {isValid: false, status: 400, message: 'Nội dung báo cáo là bắt buộc!'}
     }
 
-    if (typeof noiDung !== 'string') {
-        return {isValid: false, status: 400, message: 'Nội dung báo cáo phải là chuỗi!'}
+    const noiDung = NOIDUNG.trim()
+
+    if (noiDung.length < 10) {
+        return {isValid: false, status: 400, message: 'Nội dung báo cáo phải có ít nhất 10 ký tự!'}
     }
 
-    const noiDungDaXuLy = noiDung.trim()
-
-    if (!noiDungDaXuLy) {
-        return {isValid: false, status: 400, message: 'Nội dung báo cáo là bắt buộc!'}
+    if (noiDung.length > 1500) {
+        return {isValid: false, status: 400, message: 'Nội dung báo cáo không được vượt quá 1500 ký tự!'}
     }
 
-
-    if (noiDungDaXuLy.length < 10) {
-        return {
-            isValid: false, status: 400, message: 'Nội dung báo cáo phải có ít nhất 10 ký tự!'  }
+    if (MINHCHUNG !== undefined && MINHCHUNG !== null && typeof MINHCHUNG !== 'string') {
+        return {isValid: false, status: 400, message: 'Minh chứng phải là chuỗi!'}
     }
 
-    if (noiDungDaXuLy.length > 2000) {
-        return { isValid: false, status: 400, message: 'Nội dung báo cáo không được vượt quá 2000 ký tự!' }
-    }
+    const minhChung = typeof MINHCHUNG === 'string' ? MINHCHUNG.trim() : null
 
-    if (minhChung !== undefined && minhChung !== null && typeof minhChung !== 'string') {
-        return { isValid: false, status: 400, message: 'Minh chứng phải là chuỗi!' }
-    }
-
-    const minhChungDaXuLy = typeof minhChung === 'string' ? minhChung.trim() : null
-
-    if (minhChungDaXuLy && minhChungDaXuLy.length > 2000) {
-        return { isValid: false, status: 400, message: 'Minh chứng không được vượt quá 2000 ký tự!' }
+    if (minhChung && minhChung.length > 500) {
+        return {isValid: false, status: 400, message: 'Minh chứng không được vượt quá 500 ký tự!'}
     }
 
     return {
         isValid: true,
         data: {
             maDH,
-            maTN,
-            loaiBaoCao: loaiBaoCaoDaXuLy,
-            noiDung: noiDungDaXuLy,
-            minhChung: minhChungDaXuLy || null
+            loaiBaoCao,
+            noiDung,
+            minhChung: minhChung || null
         }
     }
 }
 
 
-module.exports = {validateCreateReport}
+module.exports = {
+    validateCreateReport
+}

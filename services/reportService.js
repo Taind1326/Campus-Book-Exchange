@@ -28,7 +28,7 @@ async function checkExistingReport(transaction, maDH, nguoiBaoCao) {
             AND NGUOIBAOCAO = @NGUOIBAOCAO`)
 
     if (result.recordset.length > 0){
-        const error = new Error('Bạn đã báo cáo giao dịch này rồi')
+        const error = new Error('Bạn đã báo cáo giao dịch này rồi!')
         error.status = 409
         throw error
     }
@@ -41,21 +41,20 @@ async function insertReport(transaction, nguoiBaoCao, nguoiBiBaoCao, data) {
     request.input('NGUOIBAOCAO', sql.Int, nguoiBaoCao)
     request.input('NGUOIBIBAOCAO', sql.Int, nguoiBiBaoCao)
     request.input('MADH', sql.Int, data.maDH)
-    request.input('MATN', sql.Int, data.maTN || null)
     request.input('LOAIBAOCAO', sql.NVarChar(50), data.loaiBaoCao)
-    request.input('NOIDUNG', sql.NVarChar(sql.MAX), data.noiDung)
-    request.input('MINHCHUNG', sql.NVarChar(sql.MAX), data.minhChung || null)
+    request.input('NOIDUNG', sql.NVarChar(1500), data.noiDung)
+    request.input('MINHCHUNG', sql.NVarChar(500), data.minhChung ?? null)
 
     const result = await request.query(`
-        INSERT INTO BAOCAO (NGUOIBAOCAO, NGUOIBIBAOCAO, MADH, MATN, LOAIBAOCAO, NOIDUNG, MINHCHUNG)
-        OUTPUT INSERTED.MABC, INSERTED.NGUOIBAOCAO, INSERTED.NGUOIBIBAOCAO, INSERTED.MADH,
-                INSERTED.MATN, INSERTED.LOAIBAOCAO, INSERTED.NOIDUNG, INSERTED.MINHCHUNG,
-                INSERTED.TRANGTHAI, INSERTED.NGAYBAOCAO
-        VALUES (@NGUOIBAOCAO, @NGUOIBIBAOCAO, @MADH, @MATN, @LOAIBAOCAO, @NOIDUNG, @MINHCHUNG)`)
+        INSERT INTO BAOCAO (NGUOIBAOCAO, NGUOIBIBAOCAO, DOITUONGBAOCAO, MADH, MATN, LOAIBAOCAO, NOIDUNG, MINHCHUNG)
+
+        OUTPUT INSERTED.MABC, INSERTED.NGUOIBAOCAO, INSERTED.NGUOIBIBAOCAO, INSERTED.DOITUONGBAOCAO, INSERTED.MADH,
+                INSERTED.MATN, INSERTED.LOAIBAOCAO, INSERTED.NOIDUNG, INSERTED.MINHCHUNG, INSERTED.TRANGTHAI, INSERTED.NGAYBAOCAO
+
+        VALUES (@NGUOIBAOCAO, @NGUOIBIBAOCAO, N'Giao dịch', @MADH, NULL, @LOAIBAOCAO, @NOIDUNG, @MINHCHUNG)`)
 
     return result.recordset[0]
 }
-
 
 
 function validateReportOrder(order, nguoiBaoCao) {

@@ -22,8 +22,8 @@ function validateReviewOrder(order, nguoiDanhGia) {
         throw error
     }
 
-    if (order.TRANGTHAI !== 'Hoàn thành') {
-        const error = new Error('Chỉ có thể đánh giá sau khi giao dịch hoàn thành!')
+    if (order.TRANGTHAI !== 'Hoàn tất') {
+        const error = new Error('Chỉ có thể đánh giá sau khi giao dịch hoàn tất!')
         error.status = 400
         throw error
     }
