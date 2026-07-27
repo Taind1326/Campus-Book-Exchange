@@ -2,7 +2,8 @@ const express = require('express')
 
 const {
     getAdminReports,
-    getAdminReportDetail
+    getAdminReportDetail,
+    claimReport
 } = require('../controllers/adminReportController')
 
 const {
@@ -17,5 +18,7 @@ const router = express.Router()
 
 router.get('/', authenticateToken, authorizeAdmin, getAdminReports)
 router.get('/:maBC', authenticateToken, authorizeAdmin, getAdminReportDetail)
+
+router.patch('/:maBC/claim', authenticateToken, authorizeAdmin, claimReport)
 
 module.exports = router

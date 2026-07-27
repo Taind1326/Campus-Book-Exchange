@@ -71,8 +71,80 @@ async function getAdminReportDetail(maBC) {
     return result.recordset[0]
 }
 
+async function getReportForProcessingWithLock(transaction, maBC) {
+    const request = new sql.Request(transaction)
+
+    request.input('MABC', sql.BigInt, maBC)
+
+    const result = await request.query(`
+        SELECT MABC, NGUOIBAOCAO, NGUOIBIBAOCAO, DOITUONGBAOCAO, MADH,
+                MATN, LOAIBAOCAO, TRANGTHAI, NGUOIXULY
+        FROM BAOCAO WITH (UPDLOCK, HOLDLOCK)
+        WHERE MABC = @MABC`)
+
+    if (result.recordset.length === 0) {
+        const error = new Error('Không tìm thấy báo cáo!')
+        error.status = 404
+        throw error
+    }
+
+    return result.recordset[0]
+}
+
+
+function validateReportClaim(report, adminId) {
+    if (report.NGUOIBAOCAO === adminId || report.NGUOIBIBAOCAO === adminId) {
+        const error = new Error('Bạn không thể xử lý báo cáo có liên quan đến tài khoản của mình!')
+        error.status = 403
+        throw error
+    }
+
+    if (report.TRANGTHAI !== 'Chờ xử lý') {
+        const error = new Error('Báo cáo này đã được nhận hoặc xử lý trước đó!')
+        error.status = 409
+        throw error
+    }
+}
+
+
+async function claimReport(transaction, maBC, adminId) {
+    const request = new sql.Request(transaction)
+
+    request.input('MABC', sql.BigInt, maBC)
+    request.input('NGUOIXULY', sql.Int, adminId)
+
+    const result = await request.query(`
+        UPDATE BAOCAO
+        SET TRANGTHAI = N'Đang xử lý',
+            NGUOIXULY = @NGUOIXULY
+
+        OUTPUT
+            INSERTED.MABC,
+            INSERTED.DOITUONGBAOCAO,
+            INSERTED.MADH,
+            INSERTED.MATN,
+            INSERTED.LOAIBAOCAO,
+            INSERTED.TRANGTHAI,
+            INSERTED.NGUOIXULY
+
+        WHERE MABC = @MABC
+          AND TRANGTHAI = N'Chờ xử lý'
+          AND NGUOIXULY IS NULL`)
+
+    if (result.recordset.length === 0) {
+        const error = new Error('Báo cáo đã được Admin khác nhận xử lý!')
+
+        error.status = 409
+        throw error
+    }
+
+    return result.recordset[0]
+}
 
 module.exports = {
     getAdminReports,
-    getAdminReportDetail
+    getAdminReportDetail,
+    getReportForProcessingWithLock,
+    validateReportClaim,
+    claimReport
 }
