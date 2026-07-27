@@ -63,7 +63,50 @@ function validateReportId(value) {
 }
 
 
+function validateResolveReport(body = {}) {
+    const {KETLUAN, KETQUAXULY} = body
+
+    if (typeof KETLUAN !== 'string' || !KETLUAN.trim()) {
+        return {isValid: false, status: 400, message: 'Kết luận báo cáo là bắt buộc!'}
+    }
+
+    const ketLuan = KETLUAN.trim()
+
+    const danhSachKetLuan = [
+        'Hợp lệ',
+        'Không hợp lệ'
+    ]
+
+    if (!danhSachKetLuan.includes(ketLuan)) {
+        return {isValid: false, status: 400, message: 'Kết luận báo cáo không hợp lệ!'}
+    }
+
+    if (typeof KETQUAXULY !== 'string' || !KETQUAXULY.trim()) {
+        return {isValid: false, status: 400, message: 'Kết quả xử lý là bắt buộc!'}
+    }
+
+    const ketQuaXuLy = KETQUAXULY.trim()
+
+    if (ketQuaXuLy.length < 10) {
+        return {isValid: false, status: 400, message: 'Kết quả xử lý phải có ít nhất 10 ký tự!'}
+    }
+
+    if (ketQuaXuLy.length > 1000) {
+        return {isValid: false, status: 400, message: 'Kết quả xử lý không được vượt quá 1000 ký tự!'}
+    }
+
+    return {
+        isValid: true,
+        data: {
+            ketLuan,
+            ketQuaXuLy
+        }
+    }
+}
+
+
 module.exports = {
     validateAdminReportListQuery,
-    validateReportId
+    validateReportId,
+    validateResolveReport
 }

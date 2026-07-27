@@ -256,6 +256,41 @@ async function createOrderIssueNotification(transaction, order, report) {
 }
 
 
+async function createReportResolvedNotifications(transaction, report, resolution) {
+    const duongDan = report.MADH ? `/orders/${report.MADH}` : null
+
+    const reporterNotification =
+        await insertNotification(transaction, {
+            nguoiNhan: report.NGUOIBAOCAO,
+            tieuDe: 'Báo cáo đã được xử lý',
+            noiDung:
+                `Báo cáo của bạn đã được kết luận: ` +
+                `${resolution.ketLuan}.`,
+            loai: 'Báo cáo',
+            maDH: report.MADH,
+            maTN: report.MATN,
+            duongDan
+        })
+
+    const reportedNotification =
+        await insertNotification(transaction, {
+            nguoiNhan: report.NGUOIBIBAOCAO,
+            tieuDe: 'Báo cáo liên quan đã được xử lý',
+            noiDung:
+                `Báo cáo liên quan đến tài khoản của bạn ` +
+                `đã được kết luận: ${resolution.ketLuan}.`,
+            loai: 'Báo cáo',
+            maDH: report.MADH,
+            maTN: report.MATN,
+            duongDan
+        })
+
+    return [
+        reporterNotification,
+        reportedNotification
+    ]
+}
+
 
 module.exports = {
     insertNotification,
@@ -272,5 +307,6 @@ module.exports = {
     createOrderCancelledNotification,
     createOrderDeliveredNotification,
     createOrderCompletedNotification,
-    createOrderIssueNotification
+    createOrderIssueNotification,
+    createReportResolvedNotifications
 }

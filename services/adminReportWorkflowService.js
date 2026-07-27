@@ -1,11 +1,25 @@
 const {sql} = require('../config/db')
+const {getIO} = require('../config/socket')
 
 const {
     getReportForProcessingWithLock: getReportForProcessingWithLockService,
     validateReportClaim: validateReportClaimService,
-    claimReport: claimReportService
+    claimReport: claimReportService,
+    validateReportResolution: validateReportResolutionService,
+    resolveReport: resolveReportService
 } = require('./adminReportService')
 
+
+const {
+    getOrderForConfirmationWithLock: getOrderForConfirmationWithLockService,
+    cancelOrderAndReleaseQuantity: cancelOrderAndReleaseQuantityService,
+    completeDisputedOrderAndDeductQuantity: completeDisputedOrderAndDeductQuantityService
+} = require('./orderService')
+
+
+const {
+    createReportResolvedNotifications: createReportResolvedNotificationsService
+} = require('./notificationService')
 
 async function claimReportWorkflow(maBC, adminId) {
     const transaction = new sql.Transaction()
@@ -53,6 +67,97 @@ async function claimReportWorkflow(maBC, adminId) {
 }
 
 
+async function resolveReportWorkflow(maBC, adminId, data) {
+    const transaction = new sql.Transaction()
+    let transactionStarted = false
+
+    try {
+        await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE)
+
+        transactionStarted = true
+
+        const report = await getReportForProcessingWithLockService(transaction, maBC)
+
+        validateReportResolutionService(report, adminId)
+
+        let order = null
+        let trangThaiDonHang = null
+        let ngayHoanThanh = null
+
+        if (report.DOITUONGBAOCAO === 'Giao dịch' && report.MADH) {
+            order = await getOrderForConfirmationWithLockService(transaction, report.MADH)
+
+            trangThaiDonHang = order.TRANGTHAI
+
+            if (order.TRANGTHAI === 'Tranh chấp') {
+                if (data.ketLuan === 'Hợp lệ') {
+                    await cancelOrderAndReleaseQuantityService(transaction, order)
+
+                    trangThaiDonHang = 'Đã hủy'
+                }
+
+                else {
+                    const completion = await completeDisputedOrderAndDeductQuantityService(transaction, order)
+
+                    trangThaiDonHang = 'Hoàn tất'
+                    ngayHoanThanh = completion.NGAYHOANTHANH
+                }
+            }
+        }
+
+        const resolvedReport = await resolveReportService(transaction, report.MABC, adminId, data)
+        const notifications = await createReportResolvedNotificationsService(transaction, report, data)
+
+        await transaction.commit()
+        transactionStarted = false
+
+        try {
+            const io = getIO()
+
+            for (const notification of notifications) {
+                io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
+            }
+        }
+
+        catch (socketError) {
+            console.error('Lỗi gửi realtime kết luận báo cáo:', socketError)
+        }
+
+        return {
+            maBC: resolvedReport.MABC,
+            doiTuongBaoCao:
+                resolvedReport.DOITUONGBAOCAO,
+            maDH: resolvedReport.MADH,
+            maTN: resolvedReport.MATN,
+            ketLuan: resolvedReport.TRANGTHAI,
+            ketQuaXuLy:
+                resolvedReport.KETQUAXULY,
+            nguoiXuLy:
+                resolvedReport.NGUOIXULY,
+            ngayXuLy:
+                resolvedReport.NGAYXULY,
+            trangThaiDonHang,
+            ngayHoanThanh
+        }
+    }
+
+    catch (error) {
+        if (transactionStarted) {
+            try {
+                await transaction.rollback()
+            }
+
+            catch (rollbackError) {
+                console.log('Lỗi rollback kết luận báo cáo:', rollbackError)
+            }
+        }
+
+        throw error
+    }
+}
+
+
 module.exports = {
-    claimReportWorkflow
+    claimReportWorkflow,
+    resolveReportWorkflow
 }

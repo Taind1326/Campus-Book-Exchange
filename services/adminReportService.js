@@ -141,10 +141,87 @@ async function claimReport(transaction, maBC, adminId) {
     return result.recordset[0]
 }
 
+
+function validateReportResolution(report, adminId) {
+    if (
+        report.NGUOIBAOCAO === adminId ||
+        report.NGUOIBIBAOCAO === adminId
+    ) {
+        const error = new Error(
+            'Bạn không thể kết luận báo cáo có liên quan đến tài khoản của mình!'
+        )
+
+        error.status = 403
+        throw error
+    }
+
+    if (report.TRANGTHAI !== 'Đang xử lý') {
+        const error = new Error(
+            'Chỉ báo cáo đang xử lý mới có thể được kết luận!'
+        )
+
+        error.status = 409
+        throw error
+    }
+
+    if (report.NGUOIXULY !== adminId) {
+        const error = new Error(
+            'Chỉ Admin đã nhận báo cáo mới được quyền kết luận!'
+        )
+
+        error.status = 403
+        throw error
+    }
+}
+
+
+async function resolveReport(transaction, maBC, adminId, data) {
+    const request = new sql.Request(transaction)
+
+    request.input('MABC', sql.BigInt, maBC)
+    request.input('NGUOIXULY', sql.Int, adminId)
+    request.input('KETLUAN', sql.NVarChar(30), data.ketLuan)
+    request.input('KETQUAXULY', sql.NVarChar(1000), data.ketQuaXuLy)
+
+    const result = await request.query(`
+        UPDATE BAOCAO
+        SET TRANGTHAI = @KETLUAN,
+            KETQUAXULY = @KETQUAXULY,
+            NGAYXULY = SYSDATETIME()
+
+        OUTPUT
+            INSERTED.MABC,
+            INSERTED.NGUOIBAOCAO,
+            INSERTED.NGUOIBIBAOCAO,
+            INSERTED.DOITUONGBAOCAO,
+            INSERTED.MADH,
+            INSERTED.MATN,
+            INSERTED.LOAIBAOCAO,
+            INSERTED.TRANGTHAI,
+            INSERTED.NGUOIXULY,
+            INSERTED.KETQUAXULY,
+            INSERTED.NGAYXULY
+
+        WHERE MABC = @MABC
+          AND TRANGTHAI = N'Đang xử lý'
+          AND NGUOIXULY = @NGUOIXULY`)
+
+    if (result.recordset.length === 0) {
+        const error = new Error('Báo cáo đã được xử lý hoặc bạn không còn quyền kết luận!')
+        error.status = 409
+        throw error
+    }
+
+    return result.recordset[0]
+}
+
+
 module.exports = {
     getAdminReports,
     getAdminReportDetail,
     getReportForProcessingWithLock,
     validateReportClaim,
-    claimReport
+    claimReport,
+    validateReportResolution,
+    resolveReport
 }

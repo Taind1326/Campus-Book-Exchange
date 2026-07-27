@@ -5,12 +5,14 @@ const {
 
 const {
     validateAdminReportListQuery,
-    validateReportId
+    validateReportId,
+    validateResolveReport
 } = require('../validators/adminReportValidator')
 
 
 const {
-    claimReportWorkflow
+    claimReportWorkflow,
+    resolveReportWorkflow
 } = require('../services/adminReportWorkflowService')
 
 
@@ -83,8 +85,34 @@ async function claimReport(req, res) {
     }
 }
 
+
+async function resolveReport(req, res) {
+    const idValidation = validateReportId(req.params.maBC)
+
+    if (!idValidation.isValid) {
+        return res.status(idValidation.status).json({message: idValidation.message})
+    }
+
+    const bodyValidation = validateResolveReport(req.body)
+
+    if (!bodyValidation.isValid) {
+        return res.status(bodyValidation.status).json({message: bodyValidation.message})
+    }
+
+    try {
+        const report = await resolveReportWorkflow(idValidation.data.maBC, req.user.MATK, bodyValidation.data)
+
+        return res.status(200).json({message: 'Kết luận báo cáo thành công!', report})
+    }
+
+    catch (error) {
+        return handleAdminReportError(res, error, 'kết luận báo cáo')
+    }
+}
+
 module.exports = {
     getAdminReports,
     getAdminReportDetail,
-    claimReport
+    claimReport,
+    resolveReport
 }
