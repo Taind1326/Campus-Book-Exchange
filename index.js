@@ -17,6 +17,7 @@ const conversationRoutes = require('./routes/conversationRoutes')
 const reviewRoutes = require('./routes/reviewRoutes')
 const reportRoutes = require('./routes/reportRoutes')
 const adminDashboardRoutes = require('./routes/adminDashboardRoutes')
+const adminReportRoutes = require('./routes/adminReportRoutes')
 
 
 const app = express()
@@ -51,6 +52,7 @@ app.use('/conversations', conversationRoutes)
 app.use('/reviews', reviewRoutes)
 app.use('/reports', reportRoutes)
 app.use('/admin/dashboard', adminDashboardRoutes)
+app.use('/admin/reports', adminReportRoutes)
 
 
 app.get('/', async (req, res) => {
