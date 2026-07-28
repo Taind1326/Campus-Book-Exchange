@@ -640,11 +640,26 @@ async function autoCompleteExpiredOrders(limit = 50) {
 
         try {
             await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE)
+
             transactionStarted = true
+
+            const exchangeProposal = await getExchangeProposalForOrderWithLockService(transaction, maDH)
+
+            let exchangeTextbooks = null
+
+            if (exchangeProposal) {
+                exchangeTextbooks = await getExchangeTextbooksForConfirmationWithLockService(transaction, exchangeProposal)
+            }
 
             const order = await getOrderForConfirmationWithLockService(transaction, maDH)
 
             validateExpiredOrderCompletionService(order)
+
+            let completedExchangeTextbook = null
+
+            if (exchangeProposal) {
+                completedExchangeTextbook = await completeExchangeTextbookAndDeductQuantityService(transaction, exchangeProposal)
+            }
 
             const completion = await completeOrderAndDeductQuantityService(transaction, order)
             const notifications = await createOrderAutoCompletedNotificationsService(transaction, order)
@@ -652,12 +667,23 @@ async function autoCompleteExpiredOrders(limit = 50) {
             await transaction.commit()
             transactionStarted = false
 
-            completedOrders.push({
+            const completedOrder = {
                 maDH: order.MADH,
                 maGT: order.MAGT,
                 soLuong: order.SOLUONG,
                 ngayHoanThanh: completion.NGAYHOANTHANH
-            })
+            }
+
+            if (exchangeProposal && exchangeTextbooks && completedExchangeTextbook) {
+                completedOrder.traoDoi = {
+                    maGTMangDoi: exchangeProposal.MAGTMANGDOI,
+                    tenGTMangDoi: exchangeTextbooks.exchangeTextbook.TENGT,
+                    soLuongMangDoi: exchangeProposal.SOLUONGMANGDOI,
+                    soLuongMangDoiConLai: completedExchangeTextbook.SOLUONG
+                }
+            }
+
+            completedOrders.push(completedOrder)
 
             try {
                 const io = getIO()
@@ -679,13 +705,12 @@ async function autoCompleteExpiredOrders(limit = 50) {
                 }
 
                 catch (rollbackError) {
-                    console.error( `Lỗi rollback tự động hoàn tất đơn ${maDH}:`, rollbackError)
+                    console.error(`Lỗi rollback tự động hoàn tất đơn ${maDH}:`, rollbackError)
                 }
             }
 
             if (error.status === 404 || error.status === 409) {
                 skippedOrders.push({maDH, reason: error.message})
-
                 continue
             }
 
