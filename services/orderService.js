@@ -84,20 +84,25 @@ async function getTextbookForOrderWithLock(transaction, maGT) {
     request.input('MAGT', sql.Int, maGT)
 
     const result = await request.query(`
-        SELECT MAGT, TENGT, MAHOCPHAN, NGUOIDANG,
-                SOLUONG, SOLUONGDANGGIU,
-                DONGIA, LOAI, TRANGTHAI
-        FROM GIAOTRINH WITH (UPDLOCK, HOLDLOCK)
-        WHERE MAGT = @MAGT`)
+        SELECT GT.MAGT, GT.TENGT, GT.MAHOCPHAN, GT.NGUOIDANG, GT.SOLUONG,
+                GT.SOLUONGDANGGIU, GT.DONGIA, GT.LOAI, GT.TRANGTHAI,
+            (
+                SELECT COUNT(*)
+                FROM HINHANHGIAOTRINH HA
+                WHERE HA.MAGT = GT.MAGT
+            ) AS SOLUONGHINH
 
-    if (result.recordset.length === 0){
+        FROM GIAOTRINH GT WITH (UPDLOCK, HOLDLOCK)
+        WHERE GT.MAGT = @MAGT`)
+
+    if (result.recordset.length === 0) {
         const error = new Error('Không tìm thấy giáo trình!')
         error.status = 404
         throw error
     }
+
     return result.recordset[0]
 }
-
 
 
 async function insertOrder(transaction, textbook, nguoiMua) {

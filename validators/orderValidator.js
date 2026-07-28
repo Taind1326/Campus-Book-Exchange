@@ -1,29 +1,62 @@
-function validateCreateOrder(body){
-    const {MAGT, SOLUONG} = body
+function validateCreateOrder(body) {
+    const {MAGT, SOLUONG, MAGTMANGDOI, SOLUONGMANGDOI} = body
 
-    if (MAGT === undefined){
+    if (MAGT === undefined || MAGT === null || MAGT === '') {
         return {isValid: false, status: 400, message: 'Thiếu mã giáo trình!'}
     }
 
-    if (SOLUONG === undefined){
-        return {isValid: false, status: 400, message: 'Thiếu số lượng muốn mua!'}
+    if (SOLUONG === undefined || SOLUONG === null || SOLUONG === '') {
+        return {isValid: false, status: 400, message: 'Thiếu số lượng muốn giao dịch!'}
     }
 
+    const maGT = Number(MAGT)
+    const soLuong = Number(SOLUONG)
 
-    const data = {
-        maGT: Number(MAGT),
-        soLuong: Number(SOLUONG)
-    }
-
-    if (!Number.isInteger(data.maGT) || data.maGT <= 0){
+    if (!Number.isInteger(maGT) || maGT <= 0) {
         return {isValid: false, status: 400, message: 'Mã giáo trình không hợp lệ!'}
     }
 
-    if (!Number.isInteger(data.soLuong) || data.soLuong <= 0){
+    if (!Number.isInteger(soLuong) || soLuong <= 0) {
         return {isValid: false, status: 400, message: 'Số lượng phải là số nguyên lớn hơn 0!'}
     }
 
-    return {isValid: true, data}
+    const coMaGTMangDoi = MAGTMANGDOI !== undefined && MAGTMANGDOI !== null && MAGTMANGDOI !== ''
+    const coSoLuongMangDoi = SOLUONGMANGDOI !== undefined && SOLUONGMANGDOI !== null && SOLUONGMANGDOI !== ''
+
+    if (coMaGTMangDoi !== coSoLuongMangDoi) {
+        return {isValid: false, status: 400, message: 'Phải cung cấp đầy đủ giáo trình mang đổi và số lượng mang đổi!'}
+    }
+
+    let maGTMangDoi = null
+    let soLuongMangDoi = null
+
+    if (coMaGTMangDoi && coSoLuongMangDoi) {
+        maGTMangDoi = Number(MAGTMANGDOI)
+        soLuongMangDoi = Number(SOLUONGMANGDOI)
+
+        if (!Number.isInteger(maGTMangDoi) || maGTMangDoi <= 0) {
+            return {isValid: false, status: 400, message: 'Mã giáo trình mang đổi không hợp lệ!'}
+        }
+
+        if (!Number.isInteger(soLuongMangDoi) || soLuongMangDoi <= 0) {
+            return {isValid: false, status: 400, message: 'Số lượng giáo trình mang đổi phải là số nguyên lớn hơn 0!'
+}
+        }
+
+        if (maGTMangDoi === maGT) {
+            return {isValid: false, status: 400, message: 'Giáo trình mang đổi phải khác giáo trình muốn nhận!'}
+        }
+    }
+
+    return {
+        isValid: true,
+        data: {
+            maGT,
+            soLuong,
+            maGTMangDoi,
+            soLuongMangDoi
+        }
+    }
 }
 
 

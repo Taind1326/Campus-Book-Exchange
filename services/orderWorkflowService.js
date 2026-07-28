@@ -50,17 +50,42 @@ const {
 } = require('./reportService')
 
 
+const {
+    validateExchangeInput: validateExchangeInputService,
+    getExchangeTextbookWithLock: getExchangeTextbookWithLockService,
+    validateExchangeTextbook: validateExchangeTextbookService,
+    insertExchangeProposal: insertExchangeProposalService,
+    getExchangeProposalForOrderWithLock: getExchangeProposalForOrderWithLockService,
+    getExchangeTextbooksForConfirmationWithLock: getExchangeTextbooksForConfirmationWithLockService,
+    validateExchangeConfirmation: validateExchangeConfirmationService,
+    holdExchangeTextbookQuantity: holdExchangeTextbookQuantityService,
+    releaseExchangeTextbookQuantity: releaseExchangeTextbookQuantityService
+} = require('./exchangeService')
+
+
 async function createOrder(data, nguoiMua) {
     const transaction = new sql.Transaction()
     let transactionStarted = false
 
     try {
         await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE)
+
         transactionStarted = true
 
         const textbook = await getTextbookForOrderWithLockService(transaction, data.maGT)
 
         validateOrderService(textbook, nguoiMua, data.soLuong)
+
+        validateExchangeInputService(textbook, data)
+
+        let exchangeTextbook = null
+        let exchangeProposal = null
+
+        if (textbook.LOAI === 'Trao đổi') {
+            exchangeTextbook = await getExchangeTextbookWithLockService(transaction, data.maGTMangDoi)
+
+            validateExchangeTextbookService(textbook, exchangeTextbook, nguoiMua, data)
+        }
 
         await checkExistingActiveOrderService(transaction, data.maGT, nguoiMua)
 
@@ -68,8 +93,11 @@ async function createOrder(data, nguoiMua) {
 
         await insertOrderDetailService(transaction, maDH, textbook, data.soLuong)
 
-        const maCuoc = await createOrGetConversationForOrderService(transaction, textbook.MAGT, maDH, nguoiMua, textbook.NGUOIDANG)
+        if (textbook.LOAI === 'Trao đổi') {
+            exchangeProposal = await insertExchangeProposalService(transaction, maDH, textbook, data)
+        }
 
+        const maCuoc = await createOrGetConversationForOrderService(transaction,textbook.MAGT, maDH, nguoiMua, textbook.NGUOIDANG)
         const notification = await createOrderNotificationService(transaction, textbook, maDH, maCuoc)
 
         await transaction.commit()
@@ -81,36 +109,50 @@ async function createOrder(data, nguoiMua) {
             io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
         }
 
-        catch(socketError){
-            console.error( 'Lỗi gửi thông báo realtime tạo đơn hàng:', socketError)
+        catch (socketError) {
+            console.error('Lỗi gửi thông báo realtime tạo đơn hàng:', socketError)
         }
 
-        return {
+        const result = {
             maDH,
             maCuoc,
             maGT: textbook.MAGT,
             tenGT: textbook.TENGT,
             nguoiBan: textbook.NGUOIDANG,
-            loaiGiaoDich: getTransactionTypeService(textbook.LOAI),
+            loaiGiaoDich:
+                getTransactionTypeService(textbook.LOAI),
             soLuong: data.soLuong,
             donGia: textbook.DONGIA,
             trangThai: 'Đang trao đổi'
         }
+
+        if (exchangeProposal) {
+            result.traoDoi = {
+                maGTDuocDoi: exchangeProposal.MAGTDUOCDOI,
+                maGTMangDoi: exchangeProposal.MAGTMANGDOI,
+                tenGTMangDoi: exchangeTextbook.TENGT,
+                soLuongMangDoi: exchangeProposal.SOLUONGMANGDOI
+            }
+        }
+
+        return result
     }
 
-    catch(error){
-        if (transactionStarted){
+    catch (error) {
+        if (transactionStarted) {
             try {
                 await transaction.rollback()
             }
 
-            catch(rollbackError){
-                console.log('Lỗi rollback tạo đơn hàng: ', rollbackError)
+            catch (rollbackError) {
+                console.log('Lỗi rollback tạo đơn hàng:', rollbackError)
             }
         }
+
         throw error
     }
 }
+
 
 async function confirmOrder(maDH, nguoiBan) {
     const transaction = new sql.Transaction()
@@ -121,9 +163,23 @@ async function confirmOrder(maDH, nguoiBan) {
 
         transactionStarted = true
 
+        const exchangeProposal = await getExchangeProposalForOrderWithLockService(transaction, maDH)
+
+        let exchangeTextbooks = null
+
+        if (exchangeProposal) {
+            exchangeTextbooks = await getExchangeTextbooksForConfirmationWithLockService(transaction, exchangeProposal)
+        }
+
         const order = await getOrderForConfirmationWithLockService(transaction, maDH)
 
         validateOrderConfirmationService(order, nguoiBan)
+
+        if (exchangeProposal) {
+            validateExchangeConfirmationService(order, exchangeProposal, exchangeTextbooks)
+
+            await holdExchangeTextbookQuantityService(transaction, exchangeProposal)
+        }
 
         await confirmOrderAndHoldQuantityService(transaction, order)
 
@@ -155,8 +211,7 @@ async function confirmOrder(maDH, nguoiBan) {
         }
 
         const soLuongConLai = order.TONGSOLUONG - (order.SOLUONGDANGGIU ?? 0) - order.SOLUONG
-
-        return {
+        const result = {
             maDH: order.MADH,
             maGT: order.MAGT,
             tenGT: order.TENGT,
@@ -166,6 +221,21 @@ async function confirmOrder(maDH, nguoiBan) {
             soLuongConLai,
             soDonBiTuChoi: rejectedOrders.length
         }
+
+        if (exchangeProposal && exchangeTextbooks) {
+            const exchangeTextbook = exchangeTextbooks.exchangeTextbook
+            const soLuongMangDoiConLai = exchangeTextbook.SOLUONG - (exchangeTextbook.SOLUONGDANGGIU ?? 0) - exchangeProposal.SOLUONGMANGDOI
+
+            result.traoDoi = {
+                maGTDuocDoi: exchangeProposal.MAGTDUOCDOI,
+                maGTMangDoi: exchangeProposal.MAGTMANGDOI,
+                tenGTMangDoi: exchangeTextbook.TENGT,
+                soLuongMangDoi: exchangeProposal.SOLUONGMANGDOI,
+                soLuongMangDoiConLai
+            }
+        }
+
+        return result
     }
 
     catch (error) {
@@ -263,9 +333,23 @@ async function cancelOrder(maDH, nguoiDung) {
 
         transactionStarted = true
 
+        const exchangeProposal = await getExchangeProposalForOrderWithLockService(transaction, maDH)
+
+        let exchangeTextbooks = null
+
+        if (exchangeProposal) {
+            exchangeTextbooks = await getExchangeTextbooksForConfirmationWithLockService(transaction, exchangeProposal)
+        }
+
         const order = await getOrderForConfirmationWithLockService(transaction, maDH)
 
         validateOrderCancellationService(order, nguoiDung)
+
+        let soLuongMangDoiDuocTra = 0
+
+        if (exchangeProposal) {
+            soLuongMangDoiDuocTra = await releaseExchangeTextbookQuantityService(transaction, exchangeProposal, order.TRANGTHAI)
+        }
 
         await cancelOrderAndReleaseQuantityService(transaction, order)
 
@@ -284,14 +368,29 @@ async function cancelOrder(maDH, nguoiDung) {
             console.error('Lỗi gửi realtime hủy đơn:', socketError)
         }
 
-        return {
+        const result = {
             maDH: order.MADH,
             maGT: order.MAGT,
             tenGT: order.TENGT,
             trangThaiCu: order.TRANGTHAI,
             trangThai: 'Đã hủy',
-            soLuongDuocTra: order.TRANGTHAI === 'Đang trao đổi' ? 0 : order.SOLUONG
+
+            soLuongDuocTra:
+                order.TRANGTHAI === 'Đang trao đổi'
+                    ? 0
+                    : order.SOLUONG
         }
+
+        if (exchangeProposal && exchangeTextbooks) {
+            const exchangeTextbook = exchangeTextbooks.exchangeTextbook
+            result.traoDoi = {
+                maGTMangDoi: exchangeProposal.MAGTMANGDOI,
+                tenGTMangDoi: exchangeTextbook.TENGT,
+                soLuongMangDoiDuocTra
+            }
+        }
+
+        return result
     }
 
     catch (error) {
@@ -308,7 +407,6 @@ async function cancelOrder(maDH, nguoiDung) {
         throw error
     }
 }
-
 
 
 async function markOrderDelivered(maDH, nguoiBan) {
