@@ -23,7 +23,9 @@ const {
     validateOrderReceipt: validateOrderReceiptService,
     completeOrderAndDeductQuantity: completeOrderAndDeductQuantityService,
     validateOrderIssue: validateOrderIssueService,
-    markOrderAsDisputed: markOrderAsDisputedService
+    markOrderAsDisputed: markOrderAsDisputedService,
+    getExpiredOrderIds: getExpiredOrderIdsService,
+    validateExpiredOrderCompletion: validateExpiredOrderCompletionService
 } = require('./orderService')
 
 const {
@@ -38,7 +40,8 @@ const {
     createOrderCancelledNotification: createOrderCancelledNotificationService,
     createOrderDeliveredNotification: createOrderDeliveredNotificationService,
     createOrderCompletedNotification: createOrderCompletedNotificationService,
-    createOrderIssueNotification: createOrderIssueNotificationService
+    createOrderIssueNotification: createOrderIssueNotificationService,
+    createOrderAutoCompletedNotifications: createOrderAutoCompletedNotificationsService
 } = require('./notificationService')
 
 const {
@@ -499,6 +502,86 @@ async function reportOrderIssue(data, nguoiMua) {
 }
 
 
+
+async function autoCompleteExpiredOrders(limit = 50) {
+    const expiredOrderIds = await getExpiredOrderIdsService(limit)
+    const completedOrders = []
+    const skippedOrders = []
+    const failedOrders = []
+
+    for (const maDH of expiredOrderIds) {
+        const transaction = new sql.Transaction()
+        let transactionStarted = false
+
+        try {
+            await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE)
+            transactionStarted = true
+
+            const order = await getOrderForConfirmationWithLockService(transaction, maDH)
+
+            validateExpiredOrderCompletionService(order)
+
+            const completion = await completeOrderAndDeductQuantityService(transaction, order)
+            const notifications = await createOrderAutoCompletedNotificationsService(transaction, order)
+
+            await transaction.commit()
+            transactionStarted = false
+
+            completedOrders.push({
+                maDH: order.MADH,
+                maGT: order.MAGT,
+                soLuong: order.SOLUONG,
+                ngayHoanThanh: completion.NGAYHOANTHANH
+            })
+
+            try {
+                const io = getIO()
+
+                for (const notification of notifications) {
+                    io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
+                }
+            }
+
+            catch (socketError) {
+                console.error(`Lỗi gửi realtime tự động hoàn tất đơn ${maDH}:`, socketError)
+            }
+        }
+
+        catch (error) {
+            if (transactionStarted) {
+                try {
+                    await transaction.rollback()
+                }
+
+                catch (rollbackError) {
+                    console.error( `Lỗi rollback tự động hoàn tất đơn ${maDH}:`, rollbackError)
+                }
+            }
+
+            if (error.status === 404 || error.status === 409) {
+                skippedOrders.push({maDH, reason: error.message})
+
+                continue
+            }
+
+            console.error(`Lỗi tự động hoàn tất đơn ${maDH}:`, error)
+
+            failedOrders.push({maDH, reason: error.message})
+        }
+    }
+
+    return {
+        totalExpired: expiredOrderIds.length,
+        totalCompleted: completedOrders.length,
+        totalSkipped: skippedOrders.length,
+        totalFailed: failedOrders.length,
+        completedOrders,
+        skippedOrders,
+        failedOrders
+    }
+}
+
+
 module.exports = {
     createOrder, 
     confirmOrder, 
@@ -509,5 +592,6 @@ module.exports = {
     cancelOrder,
     markOrderDelivered,
     confirmOrderReceived,
-    reportOrderIssue
+    reportOrderIssue,
+    autoCompleteExpiredOrders
 }

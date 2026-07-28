@@ -21,6 +21,9 @@ const {
     validateCreateReport
 } = require('../validators/reportValidator')
 
+const {
+    triggerExpiredOrderCompletion
+} = require('../services/orderMaintenanceService')
 
 function handleOrderError(res, error, action) {
     console.log(`Lỗi ${action}:`, error)
@@ -72,64 +75,6 @@ async function confirmOrder(req, res) {
     }
 }
 
-
-
-async function getBuyingOrders(req, res) {
-    const validation = validateOrderListQuery(req.query)
-
-    if (!validation.isValid) {
-        return res.status(validation.status).json({message: validation.message})
-    }
-
-    try {
-        const result = await getBuyingOrdersWorkflow(req.user.MATK, validation.data.page, validation.data.limit)
-
-        return res.status(200).json(result)
-    }
-
-    catch (error) {
-        return handleOrderError(res, error, 'lấy danh sách đơn mua')
-    }
-}
-
-
-
-async function getSellingOrders(req, res) {
-    const validation = validateOrderListQuery(req.query)
-
-    if (!validation.isValid) {
-        return res.status(validation.status).json({message: validation.message})
-    }
-
-    try {
-        const result = await getSellingOrdersWorkflow(req.user.MATK, validation.data.page, validation.data.limit)
-
-        return res.status(200).json(result)
-    }
-
-    catch (error) {
-        return handleOrderError(res, error, 'lấy danh sách đơn bán')
-    }
-}
-
-
-async function getOrderDetail(req, res) {
-    const validation = validateOrderId(req.params.maDH)
-
-    if (!validation.isValid) {
-        return res.status(validation.status).json({message: validation.message})
-    }
-
-    try {
-        const order = await getOrderDetailWorkflow(validation.data.maDH, req.user.MATK)
-
-        return res.status(200).json({order})
-    }
-
-    catch (error) {
-        return handleOrderError(res, error,'lấy chi tiết đơn hàng')
-    }
-}
 
 
 async function rejectOrder(req, res) {
@@ -230,15 +175,76 @@ async function reportOrderIssue(req, res) {
 }
 
 
+async function getBuyingOrders(req, res) {
+    const validation = validateOrderListQuery(req.query)
+
+    if (!validation.isValid) {
+        return res.status(validation.status).json({message: validation.message})
+    }
+
+    triggerExpiredOrderCompletion()
+
+    try {
+        const result = await getBuyingOrdersWorkflow(req.user.MATK, validation.data.page, validation.data.limit)
+
+        return res.status(200).json(result)
+    }
+
+    catch (error) {
+        return handleOrderError(res, error, 'lấy danh sách đơn mua')
+    }
+}
+
+async function getSellingOrders(req, res) {
+    const validation = validateOrderListQuery(req.query)
+
+    if (!validation.isValid) {
+        return res.status(validation.status).json({message: validation.message})
+    }
+
+    triggerExpiredOrderCompletion()
+
+    try {
+        const result = await getSellingOrdersWorkflow(req.user.MATK, validation.data.page, validation.data.limit)
+
+        return res.status(200).json(result)
+    }
+
+    catch (error) {
+        return handleOrderError(res, error, 'lấy danh sách đơn bán')
+    }
+}
+
+
+async function getOrderDetail(req, res) {
+    const validation = validateOrderId(req.params.maDH)
+
+    if (!validation.isValid) {
+        return res.status(validation.status).json({message: validation.message})
+    }
+
+    triggerExpiredOrderCompletion()
+
+    try {
+        const order = await getOrderDetailWorkflow(validation.data.maDH, req.user.MATK)
+
+        return res.status(200).json({order})
+    }
+
+    catch (error) {
+        return handleOrderError(res, error, 'lấy chi tiết đơn hàng')
+    }
+}
+
 module.exports = {
     createOrder,
     confirmOrder,
-    getBuyingOrders,
     getSellingOrders,
     getOrderDetail,
     rejectOrder,
     cancelOrder,
     markOrderDelivered,
     confirmOrderReceived,
-    reportOrderIssue
+    reportOrderIssue,
+    getBuyingOrders
 }

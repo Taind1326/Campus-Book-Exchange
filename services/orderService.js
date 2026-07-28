@@ -139,7 +139,15 @@ async function getOrderForConfirmationWithLock(transaction, maDH) {
 
     const result = await request.query(`
         SELECT DH.MADH, DH.NGUOIMUA, DH.NGUOIBAN, DH.NGAYNGUOIBANXACNHAN,
-                DH.HANXACNHAN, DH.NGAYHOANTHANH,
+        DH.HANXACNHAN, DH.NGAYHOANTHANH,
+
+        CASE
+            WHEN DH.HANXACNHAN IS NOT NULL
+             AND DH.HANXACNHAN <= SYSDATETIME()
+            THEN 1
+            ELSE 0
+        END AS DAHETHAN,
+
                 DH.LOAIGIAODICH, DH.TRANGTHAI,
                 CT.MAGT, CT.SOLUONG, CT.DONGIA,
                 GT.TENGT, GT.NGUOIDANG,
@@ -399,7 +407,8 @@ function validateOrderCancellation(order, nguoiDung) {
 
     const cancellableStatuses = [
         'Đang trao đổi',
-        'Đã chốt'
+        'Đã chốt',
+        'Chờ xác nhận'
     ]
 
     if (!cancellableStatuses.includes(order.TRANGTHAI)) {
@@ -530,7 +539,7 @@ function validateOrderReceipt(order, nguoiMua) {
         throw error
     }
 
-    if (new Date(order.HANXACNHAN).getTime() < Date.now()) {
+    if (Number(order.DAHETHAN) === 1) {
         const error = new Error('Đơn hàng đã hết thời hạn xác nhận!')
         error.status = 409
         throw error
@@ -702,6 +711,51 @@ async function completeDisputedOrderAndDeductQuantity(transaction, order) {
 }
 
 
+
+async function getExpiredOrderIds(limit = 50) {
+    const request = new sql.Request()
+
+    request.input('LIMIT', sql.Int, limit)
+
+    const result = await request.query(`
+        SELECT TOP (@LIMIT) MADH
+        FROM DONHANG
+        WHERE TRANGTHAI = N'Chờ xác nhận'
+          AND HANXACNHAN IS NOT NULL
+          AND HANXACNHAN <= SYSDATETIME()
+        ORDER BY HANXACNHAN ASC, MADH ASC`)
+
+    return result.recordset.map(order => Number(order.MADH))
+}
+
+
+function validateExpiredOrderCompletion(order) {
+    if (!order) {
+        const error = new Error('Không tìm thấy đơn hàng!')
+        error.status = 404
+        throw error
+    }
+
+    if (order.TRANGTHAI !== 'Chờ xác nhận') {
+        const error = new Error('Đơn hàng không còn ở trạng thái chờ xác nhận!')
+        error.status = 409
+        throw error
+    }
+
+    if (!order.HANXACNHAN) {
+        const error = new Error('Đơn hàng chưa có hạn xác nhận!')
+        error.status = 409
+        throw error
+    }
+
+    if (Number(order.DAHETHAN) !== 1) {
+        const error = new Error('Đơn hàng chưa hết hạn xác nhận!')
+        error.status = 409
+        throw error
+    }
+}
+
+
 module.exports = {
     validateOrder, 
     checkExistingActiveOrder, 
@@ -725,5 +779,7 @@ module.exports = {
     completeOrderAndDeductQuantity,
     validateOrderIssue,
     markOrderAsDisputed,
-    completeDisputedOrderAndDeductQuantity
+    completeDisputedOrderAndDeductQuantity,
+    getExpiredOrderIds,
+    validateExpiredOrderCompletion
 }

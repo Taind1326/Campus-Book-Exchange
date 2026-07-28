@@ -292,6 +292,39 @@ async function createReportResolvedNotifications(transaction, report, resolution
 }
 
 
+
+async function createOrderAutoCompletedNotifications(transaction, order) {
+    const buyerNotification = await insertNotification(transaction, {
+        nguoiNhan: order.NGUOIMUA,
+        tieuDe: 'Giao dịch đã tự động hoàn tất',
+        noiDung:
+            `Bạn không phản hồi trong vòng 72 giờ nên giao dịch ` +
+            `giáo trình "${order.TENGT}" đã được hệ thống tự động hoàn tất.`,
+        loai: 'Đơn hàng',
+        maDH: order.MADH,
+        maGT: order.MAGT,
+        duongDan: `/orders/${order.MADH}`
+    })
+
+    const sellerNotification = await insertNotification(transaction, {
+        nguoiNhan: order.NGUOIBAN,
+        tieuDe: 'Giao dịch đã tự động hoàn tất',
+        noiDung:
+            `Giao dịch giáo trình "${order.TENGT}" đã được hệ thống ` +
+            `tự động hoàn tất do người mua không phản hồi trong vòng 72 giờ.`,
+        loai: 'Đơn hàng',
+        maDH: order.MADH,
+        maGT: order.MAGT,
+        duongDan: `/orders/${order.MADH}`
+    })
+
+    return [
+        buyerNotification,
+        sellerNotification
+    ]
+}
+
+
 module.exports = {
     insertNotification,
     createOrderNotification,
@@ -308,5 +341,6 @@ module.exports = {
     createOrderDeliveredNotification,
     createOrderCompletedNotification,
     createOrderIssueNotification,
-    createReportResolvedNotifications
+    createReportResolvedNotifications,
+    createOrderAutoCompletedNotifications
 }
