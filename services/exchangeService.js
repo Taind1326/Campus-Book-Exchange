@@ -325,6 +325,49 @@
     }
 
 
+    async function completeExchangeTextbookAndDeductQuantity(transaction, proposal) {
+        const request = new sql.Request(transaction)
+
+        request.input('MAGTMANGDOI', sql.Int, proposal.MAGTMANGDOI)
+        request.input('SOLUONGMANGDOI', sql.Int, proposal.SOLUONGMANGDOI)
+
+        const result = await request.query(`
+            UPDATE GIAOTRINH
+            SET SOLUONG = SOLUONG - @SOLUONGMANGDOI,
+                SOLUONGDANGGIU = SOLUONGDANGGIU - @SOLUONGMANGDOI,
+
+                TRANGTHAI = CASE
+                    WHEN TRANGTHAI IN (
+                        N'Tạm ẩn',
+                        N'Đã xóa'
+                    )
+                    THEN TRANGTHAI
+
+                    WHEN SOLUONG - @SOLUONGMANGDOI = 0
+                    THEN N'Hết hàng'
+
+                    WHEN (SOLUONG - @SOLUONGMANGDOI) - (SOLUONGDANGGIU - @SOLUONGMANGDOI) > 0
+                    THEN N'Đang hiển thị' ELSE N'Đang giao dịch'
+                END,
+
+                NGAYCAPNHAT = SYSDATETIME()
+
+            OUTPUT INSERTED.MAGT, INSERTED.TENGT, INSERTED.SOLUONG, INSERTED.SOLUONGDANGGIU, INSERTED.TRANGTHAI
+
+            WHERE MAGT = @MAGTMANGDOI
+                AND LOAI = N'Trao đổi'
+                AND SOLUONG >= @SOLUONGMANGDOI
+                AND SOLUONGDANGGIU >= @SOLUONGMANGDOI`)
+
+        if (result.recordset.length === 0) {
+            const error = new Error('Dữ liệu số lượng giáo trình mang đổi không hợp lệ!')
+            error.status = 409
+            throw error
+        }
+
+        return result.recordset[0]
+    }
+    
     module.exports = {
         validateExchangeInput,
         getExchangeTextbookWithLock,
@@ -334,5 +377,6 @@
         getExchangeTextbooksForConfirmationWithLock,
         validateExchangeConfirmation,
         holdExchangeTextbookQuantity,
-        releaseExchangeTextbookQuantity
+        releaseExchangeTextbookQuantity,
+        completeExchangeTextbookAndDeductQuantity
     }

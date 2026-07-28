@@ -59,7 +59,8 @@ const {
     getExchangeTextbooksForConfirmationWithLock: getExchangeTextbooksForConfirmationWithLockService,
     validateExchangeConfirmation: validateExchangeConfirmationService,
     holdExchangeTextbookQuantity: holdExchangeTextbookQuantityService,
-    releaseExchangeTextbookQuantity: releaseExchangeTextbookQuantityService
+    releaseExchangeTextbookQuantity: releaseExchangeTextbookQuantityService,
+    completeExchangeTextbookAndDeductQuantity: completeExchangeTextbookAndDeductQuantityService
 } = require('./exchangeService')
 
 
@@ -472,11 +473,27 @@ async function confirmOrderReceived(maDH, nguoiMua) {
 
     try {
         await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE)
+
         transactionStarted = true
+
+        const exchangeProposal = await getExchangeProposalForOrderWithLockService(transaction, maDH)
+
+        let exchangeTextbooks = null
+
+        if (exchangeProposal) {
+            exchangeTextbooks = await getExchangeTextbooksForConfirmationWithLockService(transaction, exchangeProposal)
+        }
 
         const order = await getOrderForConfirmationWithLockService(transaction, maDH)
 
         validateOrderReceiptService(order, nguoiMua)
+
+        let completedExchangeTextbook = null
+
+        if (exchangeProposal) {
+            completedExchangeTextbook = await completeExchangeTextbookAndDeductQuantityService(transaction, exchangeProposal)
+        }
+
 
         const completion = await completeOrderAndDeductQuantityService(transaction, order)
         const notification = await createOrderCompletedNotificationService(transaction, order)
@@ -494,7 +511,7 @@ async function confirmOrderReceived(maDH, nguoiMua) {
             console.error('Lỗi gửi realtime hoàn tất giao dịch:', socketError)
         }
 
-        return {
+        const result = {
             maDH: order.MADH,
             maGT: order.MAGT,
             tenGT: order.TENGT,
@@ -502,9 +519,19 @@ async function confirmOrderReceived(maDH, nguoiMua) {
             soLuong: order.SOLUONG,
             trangThai: 'Hoàn tất',
             ngayHoanThanh: completion.NGAYHOANTHANH,
-            soLuongConLai:
-                order.TONGSOLUONG - order.SOLUONG
+            soLuongConLai: order.TONGSOLUONG - order.SOLUONG
         }
+
+        if (exchangeProposal && exchangeTextbooks && completedExchangeTextbook) {
+            result.traoDoi = {
+                maGTMangDoi: exchangeProposal.MAGTMANGDOI,
+                tenGTMangDoi: exchangeTextbooks.exchangeTextbook.TENGT,
+                soLuongMangDoi: exchangeProposal.SOLUONGMANGDOI,
+                soLuongMangDoiConLai: completedExchangeTextbook.SOLUONG
+            }
+        }
+
+        return result
     }
 
     catch (error) {
