@@ -16,6 +16,13 @@ const {
     completeDisputedOrderAndDeductQuantity: completeDisputedOrderAndDeductQuantityService
 } = require('./orderService')
 
+const {
+    getExchangeProposalForOrderWithLock: getExchangeProposalForOrderWithLockService,
+    getExchangeTextbooksForConfirmationWithLock: getExchangeTextbooksForConfirmationWithLockService,
+    releaseExchangeTextbookQuantity: releaseExchangeTextbookQuantityService,
+    completeExchangeTextbookAndDeductQuantity: completeExchangeTextbookAndDeductQuantityService
+} = require('./exchangeService')
+
 
 const {
     createReportResolvedNotifications: createReportResolvedNotificationsService
@@ -67,6 +74,7 @@ async function claimReportWorkflow(maBC, adminId) {
 }
 
 
+
 async function resolveReportWorkflow(maBC, adminId, data) {
     const transaction = new sql.Transaction()
     let transactionStarted = false
@@ -83,20 +91,37 @@ async function resolveReportWorkflow(maBC, adminId, data) {
         let order = null
         let trangThaiDonHang = null
         let ngayHoanThanh = null
+        let exchangeProposal = null
+        let exchangeTextbooks = null
+        let processedExchangeTextbook = null
 
         if (report.DOITUONGBAOCAO === 'Giao dịch' && report.MADH) {
+            exchangeProposal = await getExchangeProposalForOrderWithLockService(transaction, report.MADH)
+
+            if (exchangeProposal) {
+                exchangeTextbooks = await getExchangeTextbooksForConfirmationWithLockService(transaction, exchangeProposal)
+            }
+
             order = await getOrderForConfirmationWithLockService(transaction, report.MADH)
 
             trangThaiDonHang = order.TRANGTHAI
 
             if (order.TRANGTHAI === 'Tranh chấp') {
                 if (data.ketLuan === 'Hợp lệ') {
+                    if (exchangeProposal) {
+                        await releaseExchangeTextbookQuantityService(transaction, exchangeProposal, order.TRANGTHAI)
+                    }
+
                     await cancelOrderAndReleaseQuantityService(transaction, order)
 
                     trangThaiDonHang = 'Đã hủy'
                 }
 
                 else {
+                    if (exchangeProposal) {
+                        processedExchangeTextbook = await completeExchangeTextbookAndDeductQuantityService(transaction, exchangeProposal)
+                    }
+
                     const completion = await completeDisputedOrderAndDeductQuantityService(transaction, order)
 
                     trangThaiDonHang = 'Hoàn tất'
@@ -123,22 +148,41 @@ async function resolveReportWorkflow(maBC, adminId, data) {
             console.error('Lỗi gửi realtime kết luận báo cáo:', socketError)
         }
 
-        return {
+        const result = {
             maBC: resolvedReport.MABC,
-            doiTuongBaoCao:
-                resolvedReport.DOITUONGBAOCAO,
+            doiTuongBaoCao: resolvedReport.DOITUONGBAOCAO,
             maDH: resolvedReport.MADH,
             maTN: resolvedReport.MATN,
             ketLuan: resolvedReport.TRANGTHAI,
-            ketQuaXuLy:
-                resolvedReport.KETQUAXULY,
-            nguoiXuLy:
-                resolvedReport.NGUOIXULY,
-            ngayXuLy:
-                resolvedReport.NGAYXULY,
+            ketQuaXuLy: resolvedReport.KETQUAXULY,
+            nguoiXuLy: resolvedReport.NGUOIXULY,
+            ngayXuLy: resolvedReport.NGAYXULY,
             trangThaiDonHang,
             ngayHoanThanh
         }
+
+
+        if (exchangeProposal && exchangeTextbooks) {
+            result.traoDoi = {
+                maGTDuocDoi: exchangeProposal.MAGTDUOCDOI,
+                maGTMangDoi: exchangeProposal.MAGTMANGDOI,
+                tenGTMangDoi: exchangeTextbooks.exchangeTextbook.TENGT,
+                soLuongMangDoi: exchangeProposal.SOLUONGMANGDOI,
+                xuLy:
+                    data.ketLuan === 'Hợp lệ'
+                        ? 'Đã trả số lượng đang giữ'
+                        : 'Đã trừ số lượng',
+
+                soLuongMangDoiConLai:
+                    processedExchangeTextbook
+                        ? processedExchangeTextbook.SOLUONG
+                        : exchangeTextbooks
+                            .exchangeTextbook
+                            .SOLUONG
+            }
+        }
+
+        return result
     }
 
     catch (error) {
@@ -155,7 +199,6 @@ async function resolveReportWorkflow(maBC, adminId, data) {
         throw error
     }
 }
-
 
 module.exports = {
     claimReportWorkflow,
