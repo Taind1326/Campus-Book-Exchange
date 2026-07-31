@@ -9,6 +9,11 @@ const {
 } = require('../validators/adminSupportValidator')
 
 
+const {
+    assignSupportWorkflow
+} = require('../services/adminSupportWorkflowService')
+
+
 function handleAdminSupportError(res, error, action) {
     console.log(`Lỗi ${action}:`, error)
 
@@ -58,7 +63,27 @@ async function getAdminSupportDetail(req, res) {
 }
 
 
+async function assignSupport(req, res) {
+    const validation = validateSupportId(req.params.maPhanHoi)
+
+    if (!validation.isValid) {
+        return res.status(validation.status).json({message: validation.message})
+    }
+
+    try {
+        const support = await assignSupportWorkflow(validation.data.maPhanHoi, req.user.MATK)
+
+        return res.status(200).json({message: 'Nhận xử lý phản hồi thành công!', support})
+    }
+
+    catch (error) {
+        return handleAdminSupportError(res, error, 'nhận xử lý phản hồi')
+    }
+}
+
+
 module.exports = {
     getAdminSupports,
-    getAdminSupportDetail
+    getAdminSupportDetail,
+    assignSupport
 }

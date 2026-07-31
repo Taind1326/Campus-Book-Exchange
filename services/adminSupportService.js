@@ -131,7 +131,67 @@ async function getAdminSupportDetail(maPhanHoi) {
 }
 
 
+
+async function getSupportForProcessingWithLock(transaction, maPhanHoi) {
+    const request = new sql.Request(transaction)
+
+    request.input('MAPHANHOI', sql.BigInt, maPhanHoi)
+
+    const result = await request.query(`
+        SELECT MAPHANHOI, NGUOIGUI, LOAIPHANHOI, TIEUDE, MUCDOUUTIEN, TRANGTHAI, NGUOIXULY
+        FROM PHANHOIHOTRO WITH (UPDLOCK, HOLDLOCK)
+        WHERE MAPHANHOI = @MAPHANHOI`)
+
+    if (result.recordset.length === 0) {
+        const error = new Error('Không tìm thấy phản hồi hỗ trợ!')
+        error.status = 404
+        throw error
+    }
+
+    return result.recordset[0]
+}
+
+
+function validateSupportAssignment(support) {
+    if (support.TRANGTHAI !== 'Mới' || support.NGUOIXULY !== null) {
+        const error = new Error('Phản hồi này đã được nhận hoặc không còn có thể xử lý!')
+        error.status = 409
+        throw error
+    }
+}
+
+
+async function assignSupport(transaction, maPhanHoi, adminId) {
+    const request = new sql.Request(transaction)
+
+    request.input('MAPHANHOI', sql.BigInt, maPhanHoi)
+    request.input('NGUOIXULY', sql.Int, adminId)
+
+    const result = await request.query(`
+        UPDATE PHANHOIHOTRO
+        SET TRANGTHAI = N'Đang xử lý',
+            NGUOIXULY = @NGUOIXULY,
+            NGAYCAPNHAT = SYSDATETIME()
+        OUTPUT INSERTED.MAPHANHOI, INSERTED.NGUOIGUI, INSERTED.LOAIPHANHOI, INSERTED.TIEUDE, INSERTED.MUCDOUUTIEN,
+                INSERTED.TRANGTHAI, INSERTED.NGUOIXULY, INSERTED.NGAYCAPNHAT
+        WHERE MAPHANHOI = @MAPHANHOI
+          AND TRANGTHAI = N'Mới'
+          AND NGUOIXULY IS NULL`)
+
+    if (result.recordset.length === 0) {
+        const error = new Error('Phản hồi đã được Admin khác nhận xử lý!')
+        error.status = 409
+        throw error
+    }
+
+    return result.recordset[0]
+}
+
+
 module.exports = {
     getAdminSupports,
-    getAdminSupportDetail
+    getAdminSupportDetail,
+    getSupportForProcessingWithLock,
+    validateSupportAssignment,
+    assignSupport
 }
