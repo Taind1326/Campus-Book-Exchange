@@ -285,6 +285,49 @@ async function replySupport(transaction, maPhanHoi, adminId, data) {
 }
 
 
+function validateSupportClosure(support, adminId) {
+    if (support.TRANGTHAI !== 'Đã phản hồi') {
+        const error = new Error('Chỉ phản hồi đã được trả lời mới có thể đóng!')
+        error.status = 409
+        throw error
+    }
+
+    if (support.NGUOIXULY !== adminId) {
+        const error = new Error('Chỉ Admin đã xử lý phản hồi mới được quyền đóng!')
+        error.status = 403
+        throw error
+    }
+}
+
+
+async function closeSupport(transaction, maPhanHoi, adminId) {
+    const request = new sql.Request(transaction)
+
+    request.input('MAPHANHOI', sql.BigInt, maPhanHoi)
+    request.input('NGUOIXULY', sql.Int, adminId)
+
+    const result = await request.query(`
+        UPDATE PHANHOIHOTRO
+        SET TRANGTHAI = N'Đã đóng',
+            NGAYCAPNHAT = SYSDATETIME()
+
+        OUTPUT INSERTED.MAPHANHOI, INSERTED.NGUOIGUI, INSERTED.LOAIPHANHOI, INSERTED.TIEUDE,
+                INSERTED.MUCDOUUTIEN, INSERTED.TRANGTHAI, INSERTED.NGUOIXULY, INSERTED.CAUTRALOI, INSERTED.NGAYXULY, INSERTED.NGAYCAPNHAT
+
+        WHERE MAPHANHOI = @MAPHANHOI
+          AND TRANGTHAI = N'Đã phản hồi'
+          AND NGUOIXULY = @NGUOIXULY`)
+
+    if (result.recordset.length === 0) {
+        const error = new Error('Phản hồi đã đóng hoặc bạn không còn quyền thao tác!')
+        error.status = 409
+        throw error
+    }
+
+    return result.recordset[0]
+}
+
+
 module.exports = {
     getAdminSupports,
     getAdminSupportDetail,
@@ -294,5 +337,7 @@ module.exports = {
     validateSupportPriorityUpdate,
     updateSupportPriority,
     validateSupportReplyAction,
-    replySupport
+    replySupport,
+    validateSupportClosure,
+    closeSupport
 }

@@ -14,7 +14,8 @@ const {
 const {
     assignSupportWorkflow,
     updateSupportPriorityWorkflow,
-    replySupportWorkflow
+    replySupportWorkflow,
+    closeSupportWorkflow
 } = require('../services/adminSupportWorkflowService')
 
 
@@ -136,10 +137,30 @@ async function replySupport(req, res) {
 }
 
 
+async function closeSupport(req, res) {
+    const validation = validateSupportId(req.params.maPhanHoi)
+
+    if (!validation.isValid) {
+        return res.status(validation.status).json({message: validation.message})
+    }
+
+    try {
+        const support = await closeSupportWorkflow(validation.data.maPhanHoi, req.user.MATK)
+
+        return res.status(200).json({message: 'Đóng phản hồi hỗ trợ thành công!', support})
+    }
+
+    catch (error) {
+        return handleAdminSupportError(res, error, 'đóng phản hồi hỗ trợ')
+    }
+}
+
+
 module.exports = {
     getAdminSupports,
     getAdminSupportDetail,
     assignSupport,
     updateSupportPriority,
-    replySupport
+    replySupport,
+    closeSupport
 }

@@ -9,11 +9,14 @@ const {
     validateSupportPriorityUpdate: validateSupportPriorityUpdateService,
     updateSupportPriority: updateSupportPriorityService,
     validateSupportReplyAction: validateSupportReplyActionService,
-    replySupport: replySupportService
+    replySupport: replySupportService,
+    validateSupportClosure: validateSupportClosureService,
+    closeSupport: closeSupportService
 } = require('./adminSupportService')
 
 const {
-    createSupportReplyNotification: createSupportReplyNotificationService
+    createSupportReplyNotification: createSupportReplyNotificationService,
+    createSupportClosedNotification: createSupportClosedNotificationService
 } = require('./notificationService')
 
 
@@ -167,8 +170,68 @@ async function replySupportWorkflow(maPhanHoi, adminId, data) {
 }
 
 
+async function closeSupportWorkflow(maPhanHoi, adminId) {
+    const transaction = new sql.Transaction()
+    let transactionStarted = false
+
+    try {
+        await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE)
+
+        transactionStarted = true
+
+        const support = await getSupportForProcessingWithLockService(transaction, maPhanHoi)
+
+        validateSupportClosureService(support, adminId)
+
+        const closedSupport = await closeSupportService(transaction, support.MAPHANHOI, adminId)
+        const notification = await createSupportClosedNotificationService(transaction, closedSupport)
+
+        await transaction.commit()
+        transactionStarted = false
+
+        try {
+            const io = getIO()
+
+            io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
+        }
+
+        catch (socketError) {
+            console.error('Lỗi gửi realtime đóng phản hồi:', socketError)
+        }
+
+        return {
+            maPhanHoi: closedSupport.MAPHANHOI,
+            nguoiGui: closedSupport.NGUOIGUI,
+            loaiPhanHoi: closedSupport.LOAIPHANHOI,
+            tieuDe: closedSupport.TIEUDE,
+            mucDoUuTien: closedSupport.MUCDOUUTIEN,
+            trangThai: closedSupport.TRANGTHAI,
+            nguoiXuLy: closedSupport.NGUOIXULY,
+            cauTraLoi: closedSupport.CAUTRALOI,
+            ngayXuLy: closedSupport.NGAYXULY,
+            ngayCapNhat: closedSupport.NGAYCAPNHAT
+        }
+    }
+
+    catch (error) {
+        if (transactionStarted) {
+            try {
+                await transaction.rollback()
+            }
+
+            catch (rollbackError) {
+                console.error('Lỗi rollback đóng phản hồi:', rollbackError)
+            }
+        }
+
+        throw error
+    }
+}
+
+
 module.exports = {
     assignSupportWorkflow,
     updateSupportPriorityWorkflow,
-    replySupportWorkflow
+    replySupportWorkflow,
+    closeSupportWorkflow
 }

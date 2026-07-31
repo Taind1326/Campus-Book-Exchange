@@ -338,6 +338,19 @@ async function createSupportReplyNotification(transaction, support) {
 }
 
 
+async function createSupportClosedNotification(transaction, support) {
+    return insertNotification(transaction, {
+        nguoiNhan: support.NGUOIGUI,
+        tieuDe: 'Phản hồi hỗ trợ đã được đóng',
+        noiDung:
+            `Phản hồi "${support.TIEUDE}" của bạn ` +
+            `đã được Admin đóng sau khi xử lý.`,
+        loai: 'Hệ thống',
+        duongDan: `/support/${support.MAPHANHOI}`
+    })
+}
+
+
 module.exports = {
     insertNotification,
     createOrderNotification,
@@ -356,5 +369,6 @@ module.exports = {
     createOrderIssueNotification,
     createReportResolvedNotifications,
     createOrderAutoCompletedNotifications,
-    createSupportReplyNotification
+    createSupportReplyNotification,
+    createSupportClosedNotification
 }
