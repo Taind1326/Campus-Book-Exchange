@@ -1,142 +1,202 @@
-function validateAccountId(accountId){
-    const id = Number(accountId)
+function validateAccountId(value) {
+    if (value === undefined || value === null || value === '') {
+        return {isValid: false, status: 400, message: 'Thiếu mã tài khoản!'}
+    }
 
-    if (!Number.isInteger(id) || id <= 0){
+    const accountId = Number(value)
+
+    if (!Number.isInteger(accountId) || accountId <= 0) {
         return {isValid: false, status: 400, message: 'Mã tài khoản không hợp lệ!'}
     }
 
-    return {isValid: true, data: id}
+    return {
+        isValid: true,
+        data: {accountId}
+    }
 }
 
 
-function validateGetAccountsQuery(query){
-    const {keyword, role, status, page, limit} = query
+function validateGetAccountsQuery(query = {}) {
+    const page = query.page === undefined ? 1 : Number(query.page)
+    const limit = query.limit === undefined ? 20 : Number(query.limit)
 
-    const data = {
-        keyword: null,
-        role: null,
-        status: null,
-        page: 1,
-        limit: 20
+    if (!Number.isInteger(page) || page <= 0) {
+        return {isValid: false, status: 400, message: 'Trang không hợp lệ!'}
     }
 
-    if (keyword !== undefined){
-        if (typeof keyword !== 'string'){
-            return {isValid: false, status: 400, message: 'Từ khóa tìm kiếm không hợp lệ!'}
-        }
-
-        const normalizedKeyword = keyword.trim()
-
-        if (normalizedKeyword.length > 100){
-            return {isValid: false, status: 400, message: 'Từ khóa tìm kiếm không được vượt quá 100 ký tự!'}
-        }
-
-        data.keyword = normalizedKeyword || null
+    if (!Number.isInteger(limit) || limit <= 0 || limit > 100) {
+        return {isValid: false, status: 400, message: 'Số dòng mỗi trang phải từ 1 đến 100!'}
     }
 
-    if (role !== undefined){
-        const validRoles = [
-            'Sinh viên',
-            'Quản trị viên'
-        ]
-
-        if (typeof role !== 'string' || !validRoles.includes(role.trim())){
-            return {isValid: false, status: 400, message: 'Vai trò không hợp lệ!'}
-        }
-
-        data.role = role.trim()
+    if (query.keyword !== undefined && typeof query.keyword !== 'string') {
+        return {isValid: false, status: 400, message: 'Từ khóa tìm kiếm không hợp lệ!'}
     }
 
-    if (status !== undefined){
-        const validStatus = [
-            'Hoạt động',
-            'Bị hạn chế',
-            'Tạm khóa',
-            'Đã khóa'
-        ]
-
-        if (typeof status !== 'string' || !validStatus.includes(status.trim())){
-            return {isValid: false, status: 400, message: 'Trạng thái không hợp lệ!'}
-        }
-
-        data.status = status.trim()
+    if (query.role !== undefined && typeof query.role !== 'string') {
+        return {isValid: false, status: 400, message: 'Vai trò không hợp lệ!'}
     }
 
-    if (page !== undefined){
-        const value = Number(page)
-
-        if (!Number.isInteger(value) || value <= 0){
-            return {isValid: false, status: 400, message: 'Trang không hợp lệ!'}
-        }
-
-        data.page = value
+    if (query.status !== undefined && typeof query.status !== 'string') {
+        return {isValid: false, status: 400, message: 'Trạng thái tài khoản không hợp lệ!'}
     }
 
-    if (limit !== undefined){
-        const value = Number(limit)
+    const keyword = typeof query.keyword === 'string' ? query.keyword.trim() : ''
+    const role = typeof query.role === 'string' ? query.role.trim() : ''
+    const status = typeof query.status === 'string' ? query.status.trim() : ''
 
-        if (!Number.isInteger(value) || value <= 0 || value > 100){
-            return {isValid: false, status: 400, message: 'Giới hạn mỗi trang phải từ 1 đến 100!'}
-        }
+    const validRoles = [
+        'Sinh viên',
+        'Quản trị viên'
+    ]
 
-        data.limit = value
+    const validStatuses = [
+        'Hoạt động',
+        'Bị hạn chế',
+        'Tạm khóa',
+        'Đã khóa'
+    ]
+
+    if (keyword.length > 100) {
+        return {isValid: false, status: 400, message: 'Từ khóa tìm kiếm không được vượt quá 100 ký tự!'}
     }
 
-    return {isValid: true, data}
-}
-
-
-function validateRestrictAccount(body){
-    const {
-        LYDOHANCHED,
-        HANCHEDEN
-    } = body
-
-    if (typeof LYDOHANCHED !== 'string' || LYDOHANCHED.trim() === ''){
-        return {isValid: false, status: 400, message: 'Vui lòng nhập lý do hạn chế!'}
+    if (role && !validRoles.includes(role)) {
+        return {isValid: false, status: 400, message: 'Vai trò không hợp lệ!'}
     }
 
-    const reason = LYDOHANCHED.trim()
-
-    if (reason.length < 5){
-        return {isValid: false, status: 400, message: 'Lý do hạn chế phải có ít nhất 5 ký tự!'}
-    }
-
-    if (reason.length > 500){
-        return {isValid: false, status: 400, message: 'Lý do hạn chế không được vượt quá 500 ký tự!'}
-    }
-
-    let restrictedUntil = null
-
-
-    if (HANCHEDEN !== undefined && HANCHEDEN !== null){
-        if (typeof HANCHEDEN !== 'string'){
-            return {isValid: false, status: 400, message: 'Ngày hết hạn hạn chế không hợp lệ!'
-            }
-        }
-
-        const normalizedRestrictedUntil = HANCHEDEN.trim()
-
-        if (normalizedRestrictedUntil !== ''){
-            const date = new Date(normalizedRestrictedUntil)
-
-            if (Number.isNaN(date.getTime())){
-                return {isValid: false, status: 400, message: 'Ngày hết hạn hạn chế không hợp lệ!'}
-            }
-
-            if (date.getTime() <= Date.now()){
-                return {isValid: false, status: 400, message: 'Ngày hết hạn hạn chế phải lớn hơn thời gian hiện tại!'}
-            }
-
-            restrictedUntil = date
-        }
+    if (status && !validStatuses.includes(status)) {
+        return {isValid: false, status: 400, message: 'Trạng thái tài khoản không hợp lệ!'}
     }
 
     return {
         isValid: true,
         data: {
-            reason,
-            restrictedUntil
+            keyword: keyword || null,
+            role: role || null,
+            status: status || null,
+            page,
+            limit
+        }
+    }
+}
+
+
+function validateReason(value, action) {
+    if (typeof value !== 'string' || !value.trim()) {
+        return {isValid: false, status: 400, message: `Lý do ${action} là bắt buộc!`}
+    }
+
+    const reason = value.trim()
+
+    if (reason.length < 5) {
+        return {isValid: false, status: 400, message: `Lý do ${action} phải có ít nhất 5 ký tự!`}
+    }
+
+    if (reason.length > 500) {
+        return {isValid: false, status: 400, message: `Lý do ${action} không được vượt quá 500 ký tự!`}
+    }
+
+    return {
+        isValid: true,
+        data: {
+            reason
+        }
+    }
+}
+
+
+function validateFutureDate(value, required, action) {
+    if (value === undefined || value === null || value === '') {
+        if (required) {
+            return {isValid: false, status: 400, message: `Thời hạn ${action} là bắt buộc!`}
+        }
+
+        return {
+            isValid: true,
+            data: {
+                restrictedUntil: null
+            }
+        }
+    }
+
+    if (typeof value !== 'string' || !value.trim()) {
+        return {isValid: false, status: 400, message: `Thời hạn ${action} không hợp lệ!`}
+    }
+
+    const restrictedUntil = new Date(value.trim())
+
+    if (Number.isNaN(restrictedUntil.getTime())) {
+        return {isValid: false, status: 400, message: `Thời hạn ${action} không hợp lệ!`}
+    }
+
+    if (restrictedUntil.getTime() <= Date.now()) {
+        return {isValid: false, status: 400, message: `Thời hạn ${action} phải lớn hơn thời gian hiện tại!`}
+    }
+
+    return {
+        isValid: true,
+        data: { restrictedUntil}
+    }
+}
+
+
+function validateRestrictAccount(body = {}) {
+    const reasonValidation = validateReason(body.LYDOHANCHED, 'hạn chế')
+
+    if (!reasonValidation.isValid) {
+        return reasonValidation
+    }
+
+    const dateValidation = validateFutureDate(body.HANCHEDEN, false, 'hạn chế')
+
+    if (!dateValidation.isValid) {
+        return dateValidation
+    }
+
+    return {
+        isValid: true,
+        data: {
+            reason: reasonValidation.data.reason,
+            restrictedUntil: dateValidation.data.restrictedUntil
+        }
+    }
+}
+
+
+function validateTemporaryLockAccount(body = {}) {
+    const reasonValidation = validateReason(body.LYDOHANCHED, 'tạm khóa')
+
+    if (!reasonValidation.isValid) {
+        return reasonValidation
+    }
+
+    const dateValidation = validateFutureDate(body.HANCHEDEN, true, 'tạm khóa')
+
+    if (!dateValidation.isValid) {
+        return dateValidation
+    }
+
+    return {
+        isValid: true,
+        data: {
+            reason: reasonValidation.data.reason,
+            restrictedUntil: dateValidation.data.restrictedUntil
+        }
+    }
+}
+
+
+function validatePermanentLockAccount(body = {}) {
+    const reasonValidation = validateReason(body.LYDOHANCHED, 'khóa vĩnh viễn')
+
+    if (!reasonValidation.isValid) {
+        return reasonValidation
+    }
+
+    return {
+        isValid: true,
+        data: {
+            reason: reasonValidation.data.reason
         }
     }
 }
@@ -145,5 +205,7 @@ function validateRestrictAccount(body){
 module.exports = {
     validateAccountId,
     validateGetAccountsQuery,
-    validateRestrictAccount
+    validateRestrictAccount,
+    validateTemporaryLockAccount,
+    validatePermanentLockAccount
 }

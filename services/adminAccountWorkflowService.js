@@ -1,3 +1,5 @@
+const {sql} = require('../config/db')
+
 const {
     getAccounts: getAccountsService,
     getAccountById: getAccountByIdService,
@@ -10,150 +12,155 @@ const {
 } = require('./adminAccountService')
 
 
-function createError(message, status){
+function createError(message, status) {
     const error = new Error(message)
     error.status = status
-
     return error
 }
 
 
-async function getAccountsWorkflow(filters){
-    return await getAccountsService(filters)
+function validateAccountTarget(account, adminId) {
+    if (account.MATK === adminId) {
+        throw createError('Bạn không thể thay đổi trạng thái tài khoản của chính mình!', 403)
+    }
+
+    if (account.VAITRO === 'Quản trị viên') {
+        throw createError('Không được thay đổi trạng thái tài khoản Quản trị viên!', 403)
+    }
 }
 
 
-async function getAccountByIdWorkflow(accountId){
-    const account = await getAccountByIdService(accountId)
-
-    if (!account){
-        throw createError('Tài khoản không tồn tại!', 404)
-    }
-
-    return account
-}
-
-
-async function restrictAccountWorkflow(adminId, accountId, reason, restrictedUntil){
-    const account = await getAccountForUpdateService(accountId)
-
-    if (!account){
-        throw createError('Tài khoản không tồn tại!', 404)
-    }
-
-    if (adminId === accountId){
-        throw createError('Bạn không thể tự hạn chế tài khoản của chính mình!',400)
-    }
-
-    if (account.TRANGTHAI === 'Đã khóa'){
-        throw createError('Không thể hạn chế tài khoản đã bị khóa!', 400)
-    }
-
-    if (account.TRANGTHAI === 'Tạm khóa'){
-        throw createError('Không thể hạn chế tài khoản đang bị tạm khóa!', 400)
-    }
-
-    if (account.TRANGTHAI === 'Bị hạn chế'){
-        throw createError('Tài khoản này đã bị hạn chế!', 400)
-    }
-
-    await restrictAccountService(accountId, reason, restrictedUntil)
-
+function formatUpdatedAccount(account) {
     return {
-        message: 'Hạn chế tài khoản thành công!'
+        accountId: account.MATK,
+        tenTaiKhoan: account.TENTK,
+        vaiTro: account.VAITRO,
+        trangThai: account.TRANGTHAI,
+        lyDoHanChe: account.LYDOHANCHED,
+        hanCheDen: account.HANCHEDEN
     }
 }
 
 
-async function unrestrictAccountWorkflow(accountId){
-    const account = await getAccountForUpdateService(accountId)
+async function executeAccountUpdate(adminId, accountId, validateState, updateAction) {
+    const transaction = new sql.Transaction()
+    let transactionStarted = false
 
-    if (!account){
-        throw createError('Tài khoản không tồn tại!', 404)
+    try {
+        await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE)
+
+        transactionStarted = true
+
+        const account = await getAccountForUpdateService(transaction, accountId)
+
+        validateAccountTarget(account, adminId)
+        validateState(account)
+
+        const updatedAccount = await updateAction(transaction, account)
+
+        await transaction.commit()
+        transactionStarted = false
+
+        return formatUpdatedAccount(updatedAccount)
     }
 
-    if (account.TRANGTHAI !== 'Bị hạn chế'){
-        throw createError('Tài khoản hiện không bị hạn chế!', 400)
-    }
+    catch (error) {
+        if (transactionStarted) {
+            try {
+                await transaction.rollback()
+            }
 
-    await unrestrictAccountService(accountId)
+            catch (rollbackError) {
+                console.error('Lỗi rollback cập nhật tài khoản:', rollbackError)
+            }
+        }
 
-    return {
-        message: 'Bỏ hạn chế tài khoản thành công!'
-    }
-}
-
-
-async function temporaryLockAccountWorkflow(adminId, accountId){
-    const account = await getAccountForUpdateService(accountId)
-
-    if (!account){
-        throw createError('Tài khoản không tồn tại!', 404)
-    }
-
-    if (adminId === accountId){
-        throw createError('Bạn không thể tự tạm khóa tài khoản của chính mình!', 400)
-    }
-
-    if (account.TRANGTHAI === 'Đã khóa'){
-        throw createError('Tài khoản đã bị khóa vĩnh viễn!', 400)
-    }
-
-    if (account.TRANGTHAI === 'Tạm khóa'){
-        throw createError('Tài khoản này đã bị tạm khóa!', 400)
-    }
-
-    await temporaryLockAccountService(accountId)
-
-    return {
-        message: 'Tạm khóa tài khoản thành công!'
+        throw error
     }
 }
 
 
-async function unlockAccountWorkflow(accountId){
-    const account = await getAccountForUpdateService(accountId)
-
-    if (!account){
-        throw createError('Tài khoản không tồn tại!', 404)
-    }
-
-    if (account.TRANGTHAI === 'Đã khóa'){
-        throw createError('Không thể mở tài khoản đã bị khóa vĩnh viễn!', 400)
-    }
-
-    if (account.TRANGTHAI !== 'Tạm khóa'){
-        throw createError('Tài khoản hiện không bị tạm khóa!', 400)
-    }
-
-    await unlockAccountService(accountId)
-
-    return {
-        message: 'Mở khóa tài khoản thành công!'
-    }
+async function getAccountsWorkflow(filters) {
+    return getAccountsService(filters)
 }
 
 
-async function permanentLockAccountWorkflow(adminId, accountId){
-    const account = await getAccountForUpdateService(accountId)
+async function getAccountByIdWorkflow(accountId) {
+    return getAccountByIdService(accountId)
+}
 
-    if (!account){
-        throw createError('Tài khoản không tồn tại!', 404)
-    }
 
-    if (adminId === accountId){
-        throw createError('Bạn không thể tự khóa vĩnh viễn tài khoản của chính mình!', 400)
-    }
+async function restrictAccountWorkflow(adminId, accountId, data) {
+    return executeAccountUpdate(adminId, accountId,
+        account => {
+            if (account.TRANGTHAI !== 'Hoạt động') {
+                throw createError('Chỉ tài khoản đang hoạt động mới có thể bị hạn chế!', 409)
+            }
+        },
 
-    if (account.TRANGTHAI === 'Đã khóa'){
-        throw createError('Tài khoản này đã bị khóa vĩnh viễn!', 400)
-    }
+        (transaction, account) => restrictAccountService(transaction, account.MATK, data)
+    )
+}
 
-    await permanentLockAccountService(accountId)
 
-    return {
-        message: 'Khóa vĩnh viễn tài khoản thành công!'
-    }
+async function unrestrictAccountWorkflow(adminId, accountId) {
+    return executeAccountUpdate(adminId, accountId,
+
+        account => {
+            if (account.TRANGTHAI !== 'Bị hạn chế') {
+                throw createError('Tài khoản hiện không ở trạng thái bị hạn chế!', 409)
+            }
+        },
+
+        (transaction, account) => unrestrictAccountService(transaction, account.MATK)
+    )
+}
+
+
+async function temporaryLockAccountWorkflow(adminId, accountId, data) {
+    return executeAccountUpdate(adminId, accountId,
+
+        account => {
+            const validStatuses = [
+                'Hoạt động',
+                'Bị hạn chế'
+            ]
+
+            if (!validStatuses.includes(account.TRANGTHAI)) {
+                throw createError('Tài khoản không còn ở trạng thái có thể tạm khóa!', 409)
+            }
+        },
+
+        (transaction, account) => temporaryLockAccountService(transaction, account.MATK, data)
+    )
+}
+
+
+async function unlockAccountWorkflow(adminId, accountId) {
+    return executeAccountUpdate(adminId, accountId,
+
+        account => {
+            if (account.TRANGTHAI !== 'Tạm khóa') {
+                throw createError('Tài khoản hiện không ở trạng thái tạm khóa!', 409)
+            }
+        },
+
+        (transaction, account) => unlockAccountService(transaction, account.MATK)
+    )
+}
+
+
+async function permanentLockAccountWorkflow(adminId, accountId, data) {
+    return executeAccountUpdate(adminId, accountId,
+
+        account => {
+            if (account.TRANGTHAI === 'Đã khóa') {
+                throw createError('Tài khoản đã bị khóa vĩnh viễn!', 409)
+            }
+        },
+
+        (transaction, account) => permanentLockAccountService(transaction, account.MATK, data)
+    )
 }
 
 
