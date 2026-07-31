@@ -144,8 +144,34 @@ function validateSupportPriority(body = {}) {
     }
 }
 
+
+function validateSupportReply(body = {}) {
+    const {CAUTRALOI} = body
+
+    if (typeof CAUTRALOI !== 'string' || !CAUTRALOI.trim()) {
+        return {isValid: false, status: 400, message: 'Câu trả lời là bắt buộc!'}
+    }
+
+    const cauTraLoi = CAUTRALOI.trim()
+
+    if (cauTraLoi.length < 10) {
+        return {isValid: false, status: 400, message: 'Câu trả lời phải có ít nhất 10 ký tự!'}
+    }
+
+    if (cauTraLoi.length > 2000) {
+        return {isValid: false, status: 400, message: 'Câu trả lời không được vượt quá 2000 ký tự!'}
+    }
+
+    return {
+        isValid: true,
+        data: {cauTraLoi}
+    }
+}
+
+
 module.exports = {
     validateAdminSupportListQuery,
     validateSupportId,
-    validateSupportPriority
+    validateSupportPriority,
+    validateSupportReply
 }

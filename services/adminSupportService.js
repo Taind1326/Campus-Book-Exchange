@@ -233,6 +233,58 @@ async function updateSupportPriority(transaction, maPhanHoi, mucDoUuTien) {
 }
 
 
+function validateSupportReplyAction(support, adminId) {
+    if (support.TRANGTHAI !== 'Đang xử lý') {
+        const error = new Error(
+            'Chỉ phản hồi đang xử lý mới có thể được trả lời!'
+        )
+
+        error.status = 409
+        throw error
+    }
+
+    if (support.NGUOIXULY !== adminId) {
+        const error = new Error(
+            'Chỉ Admin đã nhận phản hồi mới được quyền trả lời!'
+        )
+
+        error.status = 403
+        throw error
+    }
+}
+
+
+async function replySupport(transaction, maPhanHoi, adminId, data) {
+    const request = new sql.Request(transaction)
+
+    request.input('MAPHANHOI', sql.BigInt, maPhanHoi)
+    request.input('NGUOIXULY', sql.Int, adminId)
+    request.input('CAUTRALOI', sql.NVarChar(2000), data.cauTraLoi)
+
+    const result = await request.query(`
+        UPDATE PHANHOIHOTRO
+        SET CAUTRALOI = @CAUTRALOI,
+            TRANGTHAI = N'Đã phản hồi',
+            NGAYXULY = SYSDATETIME(),
+            NGAYCAPNHAT = SYSDATETIME()
+
+        OUTPUT INSERTED.MAPHANHOI, INSERTED.NGUOIGUI, INSERTED.LOAIPHANHOI, INSERTED.TIEUDE,
+                INSERTED.MUCDOUUTIEN, INSERTED.TRANGTHAI, INSERTED.NGUOIXULY, INSERTED.CAUTRALOI,
+                INSERTED.NGAYXULY, INSERTED.NGAYCAPNHAT
+        WHERE MAPHANHOI = @MAPHANHOI
+          AND TRANGTHAI = N'Đang xử lý'
+          AND NGUOIXULY = @NGUOIXULY`)
+
+    if (result.recordset.length === 0) {
+        const error = new Error('Phản hồi đã được xử lý hoặc bạn không còn quyền trả lời!')
+        error.status = 409
+        throw error
+    }
+
+    return result.recordset[0]
+}
+
+
 module.exports = {
     getAdminSupports,
     getAdminSupportDetail,
@@ -240,5 +292,7 @@ module.exports = {
     validateSupportAssignment,
     assignSupport,
     validateSupportPriorityUpdate,
-    updateSupportPriority
+    updateSupportPriority,
+    validateSupportReplyAction,
+    replySupport
 }

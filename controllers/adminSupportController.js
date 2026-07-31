@@ -6,13 +6,15 @@ const {
 const {
     validateAdminSupportListQuery,
     validateSupportId,
-    validateSupportPriority
+    validateSupportPriority,
+    validateSupportReply
 } = require('../validators/adminSupportValidator')
 
 
 const {
     assignSupportWorkflow,
-    updateSupportPriorityWorkflow
+    updateSupportPriorityWorkflow,
+    replySupportWorkflow
 } = require('../services/adminSupportWorkflowService')
 
 
@@ -109,9 +111,35 @@ async function updateSupportPriority(req, res) {
 }
 
 
+async function replySupport(req, res) {
+    const idValidation = validateSupportId(req.params.maPhanHoi)
+
+    if (!idValidation.isValid) {
+        return res.status(idValidation.status).json({message: idValidation.message})
+    }
+
+    const bodyValidation = validateSupportReply(req.body)
+
+    if (!bodyValidation.isValid) {
+        return res.status(bodyValidation.status).json({message: bodyValidation.message})
+    }
+
+    try {
+        const support = await replySupportWorkflow(idValidation.data.maPhanHoi, req.user.MATK, bodyValidation.data)
+
+        return res.status(200).json({message: 'Trả lời phản hồi hỗ trợ thành công!', support})
+    }
+
+    catch (error) {
+        return handleAdminSupportError(res, error, 'trả lời phản hồi hỗ trợ')
+    }
+}
+
+
 module.exports = {
     getAdminSupports,
     getAdminSupportDetail,
     assignSupport,
-    updateSupportPriority
+    updateSupportPriority,
+    replySupport
 }

@@ -4,7 +4,8 @@ const {
     getAdminSupports,
     getAdminSupportDetail,
     assignSupport,
-    updateSupportPriority
+    updateSupportPriority,
+    replySupport
 } = require('../controllers/adminSupportController')
 
 const {
@@ -24,5 +25,6 @@ router.get('/:maPhanHoi', authenticateToken, authorizeAdmin, getAdminSupportDeta
 
 router.patch('/:maPhanHoi/assign', authenticateToken, authorizeAdmin, assignSupport)
 router.patch('/:maPhanHoi/priority', authenticateToken, authorizeAdmin, updateSupportPriority)
+router.patch('/:maPhanHoi/reply', authenticateToken, authorizeAdmin, replySupport)
 
 module.exports = router

@@ -325,6 +325,19 @@ async function createOrderAutoCompletedNotifications(transaction, order) {
 }
 
 
+async function createSupportReplyNotification(transaction, support) {
+    return insertNotification(transaction, {
+        nguoiNhan: support.NGUOIGUI,
+        tieuDe: 'Phản hồi hỗ trợ đã được trả lời',
+        noiDung:
+            `Phản hồi "${support.TIEUDE}" của bạn ` +
+            `đã được Admin trả lời.`,
+        loai: 'Hệ thống',
+        duongDan: `/support/${support.MAPHANHOI}`
+    })
+}
+
+
 module.exports = {
     insertNotification,
     createOrderNotification,
@@ -342,5 +355,6 @@ module.exports = {
     createOrderCompletedNotification,
     createOrderIssueNotification,
     createReportResolvedNotifications,
-    createOrderAutoCompletedNotifications
+    createOrderAutoCompletedNotifications,
+    createSupportReplyNotification
 }
