@@ -131,20 +131,27 @@ async function login(req, res) {
             return res.status(401).json({message: 'Tên tài khoản hoặc mật khẩu không chính xác!' })
         }
 
-        if ((taiKhoan.TRANGTHAI === 'Bị hạn chế' || taiKhoan.TRANGTHAI === 'Tạm khóa') &&
-            taiKhoan.HANCHEDEN && new Date(taiKhoan.HANCHEDEN).getTime() <= Date.now()) {
-            await sql.query`
+        if (taiKhoan.TRANGTHAI === 'Bị hạn chế' || taiKhoan.TRANGTHAI === 'Tạm khóa') {
+            const normalizationResult = await sql.query`
                 UPDATE TAIKHOAN
                 SET TRANGTHAI = N'Hoạt động',
                     LYDOHANCHED = NULL,
                     HANCHEDEN = NULL
-                WHERE MATK = ${taiKhoan.MATK}`
+                WHERE MATK = ${taiKhoan.MATK}
+                AND TRANGTHAI IN (
+                    N'Bị hạn chế',
+                    N'Tạm khóa'
+                )
+                AND HANCHEDEN IS NOT NULL
+                AND HANCHEDEN <= SYSDATETIME()`
 
-            taiKhoan.TRANGTHAI = 'Hoạt động'
-            taiKhoan.LYDOHANCHED = null
-            taiKhoan.HANCHEDEN = null
+            if (normalizationResult.rowsAffected[0] === 1) {
+                taiKhoan.TRANGTHAI = 'Hoạt động'
+                taiKhoan.LYDOHANCHED = null
+                taiKhoan.HANCHEDEN = null
+            }
         }
-
+        
         if (taiKhoan.TRANGTHAI === 'Tạm khóa') {
             return res.status(403).json({message: 'Tài khoản đang tạm bị khóa!'})
         }
