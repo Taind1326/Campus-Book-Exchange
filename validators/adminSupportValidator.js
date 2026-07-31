@@ -107,7 +107,7 @@ function validateSupportId(value) {
     const maPhanHoi = Number(value)
 
     if (!Number.isInteger(maPhanHoi) || maPhanHoi <= 0) {
-        return {isValid: false,status: 400, message: 'Mã phản hồi không hợp lệ!'}
+        return {isValid: false, status: 400, message: 'Mã phản hồi không hợp lệ!'}
     }
 
     return {
@@ -117,7 +117,35 @@ function validateSupportId(value) {
 }
 
 
+function validateSupportPriority(body = {}) {
+    const {MUCDOUUTIEN} = body
+
+    if (typeof MUCDOUUTIEN !== 'string' || !MUCDOUUTIEN.trim()) {
+        return {isValid: false, status: 400, message: 'Mức độ ưu tiên là bắt buộc!'}
+    }
+
+    const mucDoUuTien = MUCDOUUTIEN.trim()
+
+    const danhSachMucDoUuTien = [
+        'Thấp',
+        'Trung bình',
+        'Cao'
+    ]
+
+    if (!danhSachMucDoUuTien.includes(mucDoUuTien)) {
+        return {isValid: false, status: 400, message: 'Mức độ ưu tiên không hợp lệ!'}
+    }
+
+    return {
+        isValid: true,
+        data: {
+            mucDoUuTien
+        }
+    }
+}
+
 module.exports = {
     validateAdminSupportListQuery,
-    validateSupportId
+    validateSupportId,
+    validateSupportPriority
 }

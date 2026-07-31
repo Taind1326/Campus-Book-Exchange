@@ -188,10 +188,57 @@ async function assignSupport(transaction, maPhanHoi, adminId) {
 }
 
 
+function validateSupportPriorityUpdate(support) {
+    if (
+        support.TRANGTHAI === 'Đã đóng' ||
+        support.TRANGTHAI === 'Đã hủy'
+    ) {
+        const error = new Error(
+            'Không thể đổi mức ưu tiên của phản hồi đã đóng hoặc đã hủy!'
+        )
+
+        error.status = 409
+        throw error
+    }
+}
+
+
+async function updateSupportPriority(transaction, maPhanHoi, mucDoUuTien) {
+    const request = new sql.Request(transaction)
+
+    request.input('MAPHANHOI', sql.BigInt, maPhanHoi)
+    request.input('MUCDOUUTIEN', sql.NVarChar(20), mucDoUuTien)
+
+    const result = await request.query(`
+        UPDATE PHANHOIHOTRO
+        SET MUCDOUUTIEN = @MUCDOUUTIEN,
+            NGAYCAPNHAT = SYSDATETIME()
+
+        OUTPUT INSERTED.MAPHANHOI, INSERTED.NGUOIGUI, INSERTED.MUCDOUUTIEN,
+                INSERTED.TRANGTHAI, INSERTED.NGUOIXULY, INSERTED.NGAYCAPNHAT
+
+        WHERE MAPHANHOI = @MAPHANHOI
+          AND TRANGTHAI NOT IN (
+              N'Đã đóng',
+              N'Đã hủy'
+          )`)
+
+    if (result.recordset.length === 0) {
+        const error = new Error('Không thể cập nhật mức ưu tiên của phản hồi!')
+        error.status = 409
+        throw error
+    }
+
+    return result.recordset[0]
+}
+
+
 module.exports = {
     getAdminSupports,
     getAdminSupportDetail,
     getSupportForProcessingWithLock,
     validateSupportAssignment,
-    assignSupport
+    assignSupport,
+    validateSupportPriorityUpdate,
+    updateSupportPriority
 }

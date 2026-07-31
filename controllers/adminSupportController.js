@@ -5,12 +5,14 @@ const {
 
 const {
     validateAdminSupportListQuery,
-    validateSupportId
+    validateSupportId,
+    validateSupportPriority
 } = require('../validators/adminSupportValidator')
 
 
 const {
-    assignSupportWorkflow
+    assignSupportWorkflow,
+    updateSupportPriorityWorkflow
 } = require('../services/adminSupportWorkflowService')
 
 
@@ -82,8 +84,34 @@ async function assignSupport(req, res) {
 }
 
 
+async function updateSupportPriority(req, res) {
+    const idValidation = validateSupportId(req.params.maPhanHoi)
+
+    if (!idValidation.isValid) {
+        return res.status(idValidation.status).json({message: idValidation.message})
+    }
+
+    const bodyValidation = validateSupportPriority(req.body)
+
+    if (!bodyValidation.isValid) {
+        return res.status(bodyValidation.status).json({message: bodyValidation.message})
+    }
+
+    try {
+        const support = await updateSupportPriorityWorkflow(idValidation.data.maPhanHoi, bodyValidation.data)
+
+        return res.status(200).json({message: 'Cập nhật mức ưu tiên thành công!', support})
+    }
+
+    catch (error) {
+        return handleAdminSupportError(res, error, 'cập nhật mức ưu tiên phản hồi')
+    }
+}
+
+
 module.exports = {
     getAdminSupports,
     getAdminSupportDetail,
-    assignSupport
+    assignSupport,
+    updateSupportPriority
 }
