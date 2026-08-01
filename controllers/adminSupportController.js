@@ -76,7 +76,7 @@ async function assignSupport(req, res) {
     }
 
     try {
-        const support = await assignSupportWorkflow(validation.data.maPhanHoi, req.user.MATK)
+        const support = await assignSupportWorkflow(validation.data.maPhanHoi, req.user.MATK, getAuditContext(req))
 
         return res.status(200).json({message: 'Nhận xử lý phản hồi thành công!', support})
     }
@@ -101,7 +101,7 @@ async function updateSupportPriority(req, res) {
     }
 
     try {
-        const support = await updateSupportPriorityWorkflow(idValidation.data.maPhanHoi, bodyValidation.data)
+        const support = await updateSupportPriorityWorkflow(idValidation.data.maPhanHoi, req.user.MATK, bodyValidation.data, getAuditContext(req))
 
         return res.status(200).json({message: 'Cập nhật mức ưu tiên thành công!', support})
     }
@@ -126,7 +126,7 @@ async function replySupport(req, res) {
     }
 
     try {
-        const support = await replySupportWorkflow(idValidation.data.maPhanHoi, req.user.MATK, bodyValidation.data)
+        const support = await replySupportWorkflow(idValidation.data.maPhanHoi, req.user.MATK, bodyValidation.data, getAuditContext(req))
 
         return res.status(200).json({message: 'Trả lời phản hồi hỗ trợ thành công!', support})
     }
@@ -145,13 +145,27 @@ async function closeSupport(req, res) {
     }
 
     try {
-        const support = await closeSupportWorkflow(validation.data.maPhanHoi, req.user.MATK)
+        const support = await closeSupportWorkflow(validation.data.maPhanHoi, req.user.MATK, getAuditContext(req))
 
         return res.status(200).json({message: 'Đóng phản hồi hỗ trợ thành công!', support})
     }
 
     catch (error) {
         return handleAdminSupportError(res, error, 'đóng phản hồi hỗ trợ')
+    }
+}
+
+
+function getAuditContext(req) {
+    const ip = typeof req.ip === 'string' ? req.ip.slice(0, 45) : null
+    const userAgent = req.get('user-agent')
+
+    return {
+        ip,
+        userAgent:
+            typeof userAgent === 'string'
+                ? userAgent.slice(0, 500)
+                : null
     }
 }
 

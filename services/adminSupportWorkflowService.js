@@ -1,5 +1,4 @@
 const {sql} = require('../config/db')
-
 const {getIO} = require('../config/socket')
 
 const {
@@ -19,8 +18,46 @@ const {
     createSupportClosedNotification: createSupportClosedNotificationService
 } = require('./notificationService')
 
+const {
+    insertAdminAuditLog: insertAdminAuditLogService
+} = require('./adminAuditService')
 
-async function assignSupportWorkflow(maPhanHoi, adminId) {
+
+function formatSupportData(support) {
+    return {
+        maPhanHoi: support.MAPHANHOI,
+        nguoiGui: support.NGUOIGUI,
+        loaiPhanHoi: support.LOAIPHANHOI,
+        tieuDe: support.TIEUDE,
+        mucDoUuTien: support.MUCDOUUTIEN,
+        trangThai: support.TRANGTHAI,
+        nguoiXuLy: support.NGUOIXULY,
+        cauTraLoi: support.CAUTRALOI,
+        ngayXuLy: support.NGAYXULY,
+        ngayCapNhat: support.NGAYCAPNHAT
+    }
+}
+
+
+async function insertSupportAuditLog(transaction, adminId, hanhDong, supportBefore, supportAfter, auditContext) {
+    await insertAdminAuditLogService(
+        transaction,
+        {
+            adminId,
+            hanhDong,
+            doiTuong: 'Phản hồi hỗ trợ',
+            maDoiTuong: supportBefore.MAPHANHOI,
+            duLieuTruoc: formatSupportData(supportBefore),
+            duLieuSau: formatSupportData(supportAfter),
+            lyDo: null,
+            ip: auditContext.ip ?? null,
+            userAgent: auditContext.userAgent ?? null
+        }
+    )
+}
+
+
+async function assignSupportWorkflow(maPhanHoi, adminId, auditContext = {}) {
     const transaction = new sql.Transaction()
     let transactionStarted = false
 
@@ -35,19 +72,12 @@ async function assignSupportWorkflow(maPhanHoi, adminId) {
 
         const assignedSupport = await assignSupportService(transaction, support.MAPHANHOI, adminId)
 
+        await insertSupportAuditLog(transaction, adminId, 'Nhận xử lý phản hồi', support, assignedSupport, auditContext)
+
         await transaction.commit()
         transactionStarted = false
 
-        return {
-            maPhanHoi: assignedSupport.MAPHANHOI,
-            nguoiGui: assignedSupport.NGUOIGUI,
-            loaiPhanHoi: assignedSupport.LOAIPHANHOI,
-            tieuDe: assignedSupport.TIEUDE,
-            mucDoUuTien: assignedSupport.MUCDOUUTIEN,
-            trangThai: assignedSupport.TRANGTHAI,
-            nguoiXuLy: assignedSupport.NGUOIXULY,
-            ngayCapNhat: assignedSupport.NGAYCAPNHAT
-        }
+        return formatSupportData(assignedSupport)
     }
 
     catch (error) {
@@ -66,7 +96,7 @@ async function assignSupportWorkflow(maPhanHoi, adminId) {
 }
 
 
-async function updateSupportPriorityWorkflow(maPhanHoi, data) {
+async function updateSupportPriorityWorkflow(maPhanHoi, adminId, data, auditContext = {}) {
     const transaction = new sql.Transaction()
     let transactionStarted = false
 
@@ -81,17 +111,12 @@ async function updateSupportPriorityWorkflow(maPhanHoi, data) {
 
         const updatedSupport = await updateSupportPriorityService(transaction, support.MAPHANHOI, data.mucDoUuTien)
 
+        await insertSupportAuditLog(transaction, adminId, 'Cập nhật ưu tiên phản hồi', support, updatedSupport, auditContext)
+
         await transaction.commit()
         transactionStarted = false
 
-        return {
-            maPhanHoi: updatedSupport.MAPHANHOI,
-            nguoiGui: updatedSupport.NGUOIGUI,
-            mucDoUuTien: updatedSupport.MUCDOUUTIEN,
-            trangThai: updatedSupport.TRANGTHAI,
-            nguoiXuLy: updatedSupport.NGUOIXULY,
-            ngayCapNhat: updatedSupport.NGAYCAPNHAT
-        }
+        return formatSupportData(updatedSupport)
     }
 
     catch (error) {
@@ -110,8 +135,7 @@ async function updateSupportPriorityWorkflow(maPhanHoi, data) {
 }
 
 
-
-async function replySupportWorkflow(maPhanHoi, adminId, data) {
+async function replySupportWorkflow(maPhanHoi, adminId, data, auditContext = {}) {
     const transaction = new sql.Transaction()
     let transactionStarted = false
 
@@ -127,6 +151,8 @@ async function replySupportWorkflow(maPhanHoi, adminId, data) {
         const repliedSupport = await replySupportService(transaction, support.MAPHANHOI, adminId, data)
         const notification = await createSupportReplyNotificationService(transaction, repliedSupport)
 
+        await insertSupportAuditLog(transaction, adminId, 'Trả lời phản hồi', support, repliedSupport, auditContext)
+
         await transaction.commit()
         transactionStarted = false
 
@@ -140,18 +166,7 @@ async function replySupportWorkflow(maPhanHoi, adminId, data) {
             console.error('Lỗi gửi realtime trả lời phản hồi:', socketError)
         }
 
-        return {
-            maPhanHoi: repliedSupport.MAPHANHOI,
-            nguoiGui: repliedSupport.NGUOIGUI,
-            loaiPhanHoi: repliedSupport.LOAIPHANHOI,
-            tieuDe: repliedSupport.TIEUDE,
-            mucDoUuTien: repliedSupport.MUCDOUUTIEN,
-            trangThai: repliedSupport.TRANGTHAI,
-            nguoiXuLy: repliedSupport.NGUOIXULY,
-            cauTraLoi: repliedSupport.CAUTRALOI,
-            ngayXuLy: repliedSupport.NGAYXULY,
-            ngayCapNhat: repliedSupport.NGAYCAPNHAT
-        }
+        return formatSupportData(repliedSupport)
     }
 
     catch (error) {
@@ -170,7 +185,7 @@ async function replySupportWorkflow(maPhanHoi, adminId, data) {
 }
 
 
-async function closeSupportWorkflow(maPhanHoi, adminId) {
+async function closeSupportWorkflow(maPhanHoi, adminId, auditContext = {}) {
     const transaction = new sql.Transaction()
     let transactionStarted = false
 
@@ -186,6 +201,8 @@ async function closeSupportWorkflow(maPhanHoi, adminId) {
         const closedSupport = await closeSupportService(transaction, support.MAPHANHOI, adminId)
         const notification = await createSupportClosedNotificationService(transaction, closedSupport)
 
+        await insertSupportAuditLog(transaction, adminId, 'Đóng phản hồi', support, closedSupport, auditContext)
+
         await transaction.commit()
         transactionStarted = false
 
@@ -199,18 +216,7 @@ async function closeSupportWorkflow(maPhanHoi, adminId) {
             console.error('Lỗi gửi realtime đóng phản hồi:', socketError)
         }
 
-        return {
-            maPhanHoi: closedSupport.MAPHANHOI,
-            nguoiGui: closedSupport.NGUOIGUI,
-            loaiPhanHoi: closedSupport.LOAIPHANHOI,
-            tieuDe: closedSupport.TIEUDE,
-            mucDoUuTien: closedSupport.MUCDOUUTIEN,
-            trangThai: closedSupport.TRANGTHAI,
-            nguoiXuLy: closedSupport.NGUOIXULY,
-            cauTraLoi: closedSupport.CAUTRALOI,
-            ngayXuLy: closedSupport.NGAYXULY,
-            ngayCapNhat: closedSupport.NGAYCAPNHAT
-        }
+        return formatSupportData(closedSupport)
     }
 
     catch (error) {
