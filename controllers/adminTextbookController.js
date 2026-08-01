@@ -1,12 +1,18 @@
 const {
     getAdminTextbooks: getAdminTextbooksService,
-    getAdminTextbookDetail:
-        getAdminTextbookDetailService
+    getAdminTextbookDetail: getAdminTextbookDetailService
 } = require('../services/adminTextbookService')
 
 const {
+    hideTextbookWorkflow,
+    restoreTextbookWorkflow,
+    deleteTextbookWorkflow
+} = require('../services/adminTextbookWorkflowService')
+
+const {
     validateAdminTextbookListQuery,
-    validateTextbookId
+    validateTextbookId,
+    validateHideTextbook
 } = require('../validators/adminTextbookValidator')
 
 
@@ -48,7 +54,8 @@ async function getAdminTextbookDetail(req, res) {
     }
 
     try {
-        const textbook = await getAdminTextbookDetailService(validation.data.maGT)
+        const textbook =
+            await getAdminTextbookDetailService(validation.data.maGT)
 
         return res.status(200).json({textbook})
     }
@@ -59,7 +66,73 @@ async function getAdminTextbookDetail(req, res) {
 }
 
 
+async function hideTextbook(req, res) {
+    const idValidation = validateTextbookId(req.params.maGT)
+
+    if (!idValidation.isValid) {
+        return res.status(idValidation.status).json({message: idValidation.message})
+    }
+
+    const bodyValidation = validateHideTextbook(req.body)
+
+    if (!bodyValidation.isValid) {
+        return res.status(bodyValidation.status).json({message: bodyValidation.message})
+    }
+
+    try {
+        const textbook = await hideTextbookWorkflow(idValidation.data.maGT, req.user.MATK, bodyValidation.data)
+
+        return res.status(200).json({message: 'Tạm ẩn bài đăng thành công!', textbook})
+    }
+
+    catch (error) {
+        return handleAdminTextbookError(res, error, 'tạm ẩn bài đăng')
+    }
+}
+
+
+async function restoreTextbook(req, res) {
+    const validation = validateTextbookId(req.params.maGT)
+
+    if (!validation.isValid) {
+        return res.status(validation.status).json({message: validation.message})
+    }
+
+    try {
+        const textbook = await restoreTextbookWorkflow(validation.data.maGT, req.user.MATK)
+
+        return res.status(200).json({message: 'Khôi phục bài đăng thành công!', textbook})
+    }
+
+    catch (error) {
+        return handleAdminTextbookError(res, error, 'khôi phục bài đăng')
+    }
+}
+
+
+async function deleteTextbook(req, res) {
+    const validation = validateTextbookId(req.params.maGT)
+
+    if (!validation.isValid) {
+        return res.status(validation.status).json({message: validation.message})
+    }
+
+    try {
+        const textbook = await deleteTextbookWorkflow(validation.data.maGT, req.user.MATK)
+
+        return res.status(200).json({message: 'Xóa bài đăng thành công!', textbook})
+    }
+
+    catch (error) {
+        return handleAdminTextbookError(res, error, 'xóa bài đăng')
+    }
+}
+
+
 module.exports = {
     getAdminTextbooks,
-    getAdminTextbookDetail
-}
+    getAdminTextbookDetail,
+    hideTextbook,
+    restoreTextbook,
+    deleteTextbook
+} 

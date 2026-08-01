@@ -120,7 +120,35 @@ function validateTextbookId(value) {
 }
 
 
+
+function validateHideTextbook(body = {}) {
+    const {LYDO} = body
+
+    if (typeof LYDO !== 'string' || !LYDO.trim()) {
+        return {isValid: false, status: 400, message: 'Lý do tạm ẩn bài đăng là bắt buộc!'}
+    }
+
+    const lyDo = LYDO.trim()
+
+    if (lyDo.length < 5) {
+        return {isValid: false, status: 400, message: 'Lý do tạm ẩn phải có ít nhất 5 ký tự!'}
+    }
+
+    if (lyDo.length > 500) {
+        return {isValid: false, status: 400, message: 'Lý do tạm ẩn không được vượt quá 500 ký tự!'}
+    }
+
+    return {
+        isValid: true,
+        data: {
+            lyDo
+        }
+    }
+}
+
+
 module.exports = {
     validateAdminTextbookListQuery,
-    validateTextbookId
+    validateTextbookId,
+    validateHideTextbook
 }

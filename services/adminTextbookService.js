@@ -133,7 +133,150 @@ async function getAdminTextbookDetail(maGT) {
 }
 
 
+async function getTextbookForModerationWithLock(
+    transaction,
+    maGT
+) {
+    const request = new sql.Request(transaction)
+
+    request.input('MAGT', sql.Int, maGT)
+
+    const result = await request.query(`
+        SELECT GT.MAGT, GT.TENGT, GT.NGUOIDANG,
+               GT.LOAI, GT.SOLUONG,
+               GT.SOLUONGDANGGIU, GT.TRANGTHAI,
+               GT.NGAYCAPNHAT,
+               TK.TENTK,
+               TK.TRANGTHAI AS TRANGTHAINGUOIDANG
+        FROM GIAOTRINH GT WITH (UPDLOCK, HOLDLOCK)
+        JOIN TAIKHOAN TK WITH (UPDLOCK, HOLDLOCK)
+            ON TK.MATK = GT.NGUOIDANG
+        WHERE GT.MAGT = @MAGT
+    `)
+
+    if (result.recordset.length === 0) {
+        const error = new Error(
+            'Không tìm thấy giáo trình!'
+        )
+        error.status = 404
+        throw error
+    }
+
+    return result.recordset[0]
+}
+
+
+async function hideTextbook(transaction, maGT) {
+    const request = new sql.Request(transaction)
+
+    request.input('MAGT', sql.Int, maGT)
+
+    const result = await request.query(`
+        UPDATE GIAOTRINH
+        SET TRANGTHAI = N'Tạm ẩn',
+            NGAYCAPNHAT = SYSDATETIME()
+
+        OUTPUT INSERTED.MAGT, INSERTED.TENGT,
+               INSERTED.NGUOIDANG, INSERTED.LOAI,
+               INSERTED.SOLUONG,
+               INSERTED.SOLUONGDANGGIU,
+               INSERTED.TRANGTHAI,
+               INSERTED.NGAYCAPNHAT
+
+        WHERE MAGT = @MAGT
+          AND TRANGTHAI IN (
+              N'Đang hiển thị',
+              N'Hết hàng'
+          )
+          AND SOLUONGDANGGIU = 0
+    `)
+
+    if (result.recordset.length === 0) {
+        const error = new Error(
+            'Bài đăng không còn ở trạng thái có thể tạm ẩn!'
+        )
+        error.status = 409
+        throw error
+    }
+
+    return result.recordset[0]
+}
+
+
+async function restoreTextbook(transaction, maGT) {
+    const request = new sql.Request(transaction)
+
+    request.input('MAGT', sql.Int, maGT)
+
+    const result = await request.query(`
+        UPDATE GT
+        SET GT.TRANGTHAI =
+                CASE
+                    WHEN GT.SOLUONG -
+                         GT.SOLUONGDANGGIU <= 0
+                        THEN N'Hết hàng'
+                    ELSE N'Đang hiển thị'
+                END,
+            GT.NGAYCAPNHAT = SYSDATETIME()
+
+        OUTPUT INSERTED.MAGT, INSERTED.TENGT, INSERTED.NGUOIDANG, INSERTED.LOAI, INSERTED.SOLUONG,
+               INSERTED.SOLUONGDANGGIU, INSERTED.TRANGTHAI, INSERTED.NGAYCAPNHAT
+        FROM GIAOTRINH GT
+        JOIN TAIKHOAN TK ON TK.MATK = GT.NGUOIDANG
+
+        WHERE GT.MAGT = @MAGT
+          AND GT.TRANGTHAI = N'Tạm ẩn'
+          AND TK.TRANGTHAI NOT IN (
+              N'Tạm khóa',
+              N'Đã khóa'
+          )`)
+
+    if (result.recordset.length === 0) {
+        const error = new Error('Không thể khôi phục bài đăng!')
+        error.status = 409
+        throw error
+    }
+
+    return result.recordset[0]
+}
+
+
+async function softDeleteTextbook(transaction, maGT) {
+    const request = new sql.Request(transaction)
+
+    request.input('MAGT', sql.Int, maGT)
+
+    const result = await request.query(`
+        UPDATE GIAOTRINH
+        SET TRANGTHAI = N'Đã xóa',
+            NGAYCAPNHAT = SYSDATETIME()
+
+        OUTPUT INSERTED.MAGT, INSERTED.TENGT, INSERTED.NGUOIDANG, INSERTED.LOAI, INSERTED.SOLUONG,
+               INSERTED.SOLUONGDANGGIU, INSERTED.TRANGTHAI, INSERTED.NGAYCAPNHAT
+
+        WHERE MAGT = @MAGT
+          AND TRANGTHAI IN (
+              N'Đang hiển thị',
+              N'Tạm ẩn',
+              N'Hết hàng'
+          )
+          AND SOLUONGDANGGIU = 0`)
+
+    if (result.recordset.length === 0) {
+        const error = new Error('Bài đăng không còn ở trạng thái có thể xóa!')
+        error.status = 409
+        throw error
+    }
+
+    return result.recordset[0]
+}
+
+
 module.exports = {
     getAdminTextbooks,
-    getAdminTextbookDetail
+    getAdminTextbookDetail,
+    getTextbookForModerationWithLock,
+    hideTextbook,
+    restoreTextbook,
+    softDeleteTextbook
 }

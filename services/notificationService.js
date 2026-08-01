@@ -351,6 +351,47 @@ async function createSupportClosedNotification(transaction, support) {
 }
 
 
+async function createTextbookHiddenNotification(transaction, textbook, lyDo) {
+    return insertNotification(transaction, {
+        nguoiNhan: textbook.NGUOIDANG,
+        tieuDe: 'Bài đăng đã bị tạm ẩn',
+        noiDung:
+            `Bài đăng "${textbook.TENGT}" đã bị Admin ` +
+            `tạm ẩn. Lý do: ${lyDo}.`,
+        loai: 'Hệ thống',
+        maGT: textbook.MAGT,
+        duongDan: `/giaotrinh/${textbook.MAGT}`
+    })
+}
+
+
+async function createTextbookRestoredNotification(transaction, textbook) {
+    return insertNotification(transaction, {
+        nguoiNhan: textbook.NGUOIDANG,
+        tieuDe: 'Bài đăng đã được khôi phục',
+        noiDung:
+            `Bài đăng "${textbook.TENGT}" đã được Admin ` +
+            `khôi phục với trạng thái "${textbook.TRANGTHAI}".`,
+        loai: 'Hệ thống',
+        maGT: textbook.MAGT,
+        duongDan: `/giaotrinh/${textbook.MAGT}`
+    })
+}
+
+
+async function createTextbookDeletedNotification(transaction, textbook) {
+    return insertNotification(transaction, {
+        nguoiNhan: textbook.NGUOIDANG,
+        tieuDe: 'Bài đăng đã bị xóa',
+        noiDung:
+            `Bài đăng "${textbook.TENGT}" đã bị Admin xóa ` +
+            `khỏi hệ thống do không còn phù hợp.`,
+        loai: 'Hệ thống',
+        maGT: textbook.MAGT,
+        duongDan: '/giaotrinh/my'
+    })
+}
+
 module.exports = {
     insertNotification,
     createOrderNotification,
@@ -370,5 +411,8 @@ module.exports = {
     createReportResolvedNotifications,
     createOrderAutoCompletedNotifications,
     createSupportReplyNotification,
-    createSupportClosedNotification
+    createSupportClosedNotification,
+    createTextbookHiddenNotification,
+    createTextbookRestoredNotification,
+    createTextbookDeletedNotification
 }
