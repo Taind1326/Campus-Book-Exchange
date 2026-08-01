@@ -14,6 +14,10 @@ const {
     createTextbookDeletedNotification: createTextbookDeletedNotificationService
 } = require('./notificationService')
 
+const {
+    insertAdminAuditLog: insertAdminAuditLogService
+} = require('./adminAuditService')
+
 
 function createError(message, status) {
     const error = new Error(message)
@@ -22,7 +26,7 @@ function createError(message, status) {
 }
 
 
-function formatModeratedTextbook(textbook, adminId) {
+function formatTextbookData(textbook) {
     return {
         maGT: textbook.MAGT,
         tenGT: textbook.TENGT,
@@ -31,13 +35,20 @@ function formatModeratedTextbook(textbook, adminId) {
         soLuong: textbook.SOLUONG,
         soLuongDangGiu: textbook.SOLUONGDANGGIU,
         trangThai: textbook.TRANGTHAI,
-        nguoiXuLy: adminId,
         ngayCapNhat: textbook.NGAYCAPNHAT
     }
 }
 
 
-async function executeTextbookModeration(maGT, adminId, validateAction, updateAction, createNotification) {
+function formatModeratedTextbook(textbook, adminId) {
+    return {
+        ...formatTextbookData(textbook),
+        nguoiXuLy: adminId
+    }
+}
+
+
+async function executeTextbookModeration(maGT, adminId, auditContext, auditInfo, validateAction, updateAction, createNotification) {
     const transaction = new sql.Transaction()
     let transactionStarted = false
 
@@ -52,6 +63,21 @@ async function executeTextbookModeration(maGT, adminId, validateAction, updateAc
 
         const updatedTextbook = await updateAction(transaction, textbook)
         const notification = await createNotification(transaction, updatedTextbook)
+
+        await insertAdminAuditLogService(
+            transaction,
+            {
+                adminId,
+                hanhDong: auditInfo.hanhDong,
+                doiTuong: 'Giáo trình',
+                maDoiTuong: textbook.MAGT,
+                duLieuTruoc: formatTextbookData(textbook),
+                duLieuSau: formatTextbookData(updatedTextbook),
+                lyDo: auditInfo.lyDo ?? null,
+                ip: auditContext.ip ?? null,
+                userAgent: auditContext.userAgent ?? null
+            }
+        )
 
         await transaction.commit()
         transactionStarted = false
@@ -85,8 +111,13 @@ async function executeTextbookModeration(maGT, adminId, validateAction, updateAc
 }
 
 
-async function hideTextbookWorkflow(maGT, adminId, data) {
-    const textbook = await executeTextbookModeration(maGT, adminId,
+async function hideTextbookWorkflow(maGT, adminId, data, auditContext = {}) {
+    const textbook = await executeTextbookModeration(maGT, adminId, auditContext,
+            {
+                hanhDong: 'Tạm ẩn bài đăng',
+                lyDo: data.lyDo
+            },
+
             currentTextbook => {
                 const validStatuses = [
                     'Đang hiển thị',
@@ -103,8 +134,8 @@ async function hideTextbookWorkflow(maGT, adminId, data) {
             },
 
             (transaction, currentTextbook) => hideTextbookService(transaction, currentTextbook.MAGT),
-
-            (transaction, updatedTextbook) => createTextbookHiddenNotificationService(transaction, updatedTextbook, data.lyDo))
+            (transaction, updatedTextbook) => createTextbookHiddenNotificationService(transaction, updatedTextbook, data.lyDo                )
+        )
 
     return {
         ...textbook,
@@ -113,8 +144,12 @@ async function hideTextbookWorkflow(maGT, adminId, data) {
 }
 
 
-async function restoreTextbookWorkflow(maGT, adminId) {
-    return executeTextbookModeration(maGT, adminId,
+async function restoreTextbookWorkflow(maGT, adminId, auditContext = {}) {
+    return executeTextbookModeration(maGT, adminId, auditContext,
+        {
+            hanhDong: 'Khôi phục bài đăng',
+            lyDo: null
+        },
 
         currentTextbook => {
             if (currentTextbook.TRANGTHAI !== 'Tạm ẩn') {
@@ -132,14 +167,17 @@ async function restoreTextbookWorkflow(maGT, adminId) {
         },
 
         (transaction, currentTextbook) => restoreTextbookService(transaction, currentTextbook.MAGT),
-
         (transaction, updatedTextbook) => createTextbookRestoredNotificationService(transaction, updatedTextbook)
     )
 }
 
 
-async function deleteTextbookWorkflow( maGT, adminId) {
-    return executeTextbookModeration(maGT, adminId,
+async function deleteTextbookWorkflow(maGT, adminId, auditContext = {}) {
+    return executeTextbookModeration(maGT, adminId, auditContext,
+        {
+            hanhDong: 'Xóa bài đăng',
+            lyDo: null
+        },
 
         currentTextbook => {
             const validStatuses = [
@@ -158,7 +196,6 @@ async function deleteTextbookWorkflow( maGT, adminId) {
         },
 
         (transaction, currentTextbook) => softDeleteTextbookService(transaction, currentTextbook.MAGT),
-
         (transaction, updatedTextbook) => createTextbookDeletedNotificationService(transaction, updatedTextbook)
     )
 }

@@ -80,7 +80,7 @@ async function hideTextbook(req, res) {
     }
 
     try {
-        const textbook = await hideTextbookWorkflow(idValidation.data.maGT, req.user.MATK, bodyValidation.data)
+        const textbook = await hideTextbookWorkflow(idValidation.data.maGT, req.user.MATK, bodyValidation.data, getAuditContext(req))
 
         return res.status(200).json({message: 'Tạm ẩn bài đăng thành công!', textbook})
     }
@@ -99,7 +99,7 @@ async function restoreTextbook(req, res) {
     }
 
     try {
-        const textbook = await restoreTextbookWorkflow(validation.data.maGT, req.user.MATK)
+        const textbook = await restoreTextbookWorkflow(validation.data.maGT, req.user.MATK, getAuditContext(req))
 
         return res.status(200).json({message: 'Khôi phục bài đăng thành công!', textbook})
     }
@@ -118,7 +118,7 @@ async function deleteTextbook(req, res) {
     }
 
     try {
-        const textbook = await deleteTextbookWorkflow(validation.data.maGT, req.user.MATK)
+        const textbook = await deleteTextbookWorkflow(validation.data.maGT, req.user.MATK, getAuditContext(req))
 
         return res.status(200).json({message: 'Xóa bài đăng thành công!', textbook})
     }
@@ -127,6 +127,19 @@ async function deleteTextbook(req, res) {
         return handleAdminTextbookError(res, error, 'xóa bài đăng')
     }
 }
+
+
+function getAuditContext(req) {
+    const ip = typeof req.ip === 'string' ? req.ip.slice(0, 45) : null
+    const userAgent = req.get('user-agent')
+
+    return {
+        ip,
+        userAgent:
+            typeof userAgent === 'string' ? userAgent.slice(0, 500) : null
+    }
+}
+
 
 
 module.exports = {

@@ -80,7 +80,7 @@ async function restrictAccount(req, res) {
     }
 
     try {
-        const account = await restrictAccountWorkflow(req.user.MATK, idValidation.data.accountId, bodyValidation.data)
+        const account = await restrictAccountWorkflow(req.user.MATK, idValidation.data.accountId, bodyValidation.data, getAuditContext(req))
 
         return res.status(200).json({message: 'Hạn chế tài khoản thành công!', account})
     }
@@ -99,7 +99,7 @@ async function unrestrictAccount(req, res) {
     }
 
     try {
-        const account = await unrestrictAccountWorkflow(req.user.MATK, validation.data.accountId)
+        const account = await unrestrictAccountWorkflow(req.user.MATK, validation.data.accountId, getAuditContext(req))
 
         return res.status(200).json({message: 'Bỏ hạn chế tài khoản thành công!', account})
     }
@@ -124,7 +124,7 @@ async function temporaryLockAccount(req, res) {
     }
 
     try {
-        const account = await temporaryLockAccountWorkflow(req.user.MATK, idValidation.data.accountId, bodyValidation.data)
+        const account = await temporaryLockAccountWorkflow(req.user.MATK, idValidation.data.accountId, bodyValidation.data, getAuditContext(req))
 
         return res.status(200).json({message: 'Tạm khóa tài khoản thành công!', account})
     }
@@ -143,7 +143,7 @@ async function unlockAccount(req, res) {
     }
 
     try {
-        const account = await unlockAccountWorkflow(req.user.MATK, validation.data.accountId)
+        const account = await unlockAccountWorkflow(req.user.MATK, validation.data.accountId, getAuditContext(req))
 
         return res.status(200).json({message: 'Mở khóa tài khoản thành công!', account})
     }
@@ -168,13 +168,27 @@ async function permanentLockAccount(req, res) {
     }
 
     try {
-        const account = await permanentLockAccountWorkflow(req.user.MATK, idValidation.data.accountId, bodyValidation.data)
+        const account = await permanentLockAccountWorkflow(req.user.MATK, idValidation.data.accountId, bodyValidation.data, getAuditContext(req))
 
         return res.status(200).json({message: 'Khóa vĩnh viễn tài khoản thành công!', account})
     }
 
     catch (error) {
         return handleAdminAccountError(res, error, 'khóa vĩnh viễn tài khoản')
+    }
+}
+
+
+function getAuditContext(req) {
+    const ip = typeof req.ip === 'string' ? req.ip.slice(0, 45) : null
+    const userAgent = req.get('user-agent')
+
+    return {
+        ip,
+        userAgent:
+            typeof userAgent === 'string'
+                ? userAgent.slice(0, 500)
+                : null
     }
 }
 

@@ -11,6 +11,10 @@ const {
     permanentLockAccount: permanentLockAccountService
 } = require('./adminAccountService')
 
+const {
+    insertAdminAuditLog: insertAdminAuditLogService
+} = require('./adminAuditService')
+
 
 function createError(message, status) {
     const error = new Error(message)
@@ -30,7 +34,7 @@ function validateAccountTarget(account, adminId) {
 }
 
 
-function formatUpdatedAccount(account) {
+function formatAccountData(account) {
     return {
         accountId: account.MATK,
         tenTaiKhoan: account.TENTK,
@@ -42,7 +46,7 @@ function formatUpdatedAccount(account) {
 }
 
 
-async function executeAccountUpdate(adminId, accountId, validateState, updateAction) {
+async function executeAccountUpdate(adminId, accountId, auditContext, auditInfo, validateState, updateAction) {
     const transaction = new sql.Transaction()
     let transactionStarted = false
 
@@ -58,10 +62,28 @@ async function executeAccountUpdate(adminId, accountId, validateState, updateAct
 
         const updatedAccount = await updateAction(transaction, account)
 
+        await insertAdminAuditLogService(
+            transaction,
+            {
+                adminId,
+                hanhDong: auditInfo.hanhDong,
+                doiTuong: 'Tài khoản',
+                maDoiTuong: account.MATK,
+                duLieuTruoc: formatAccountData(account),
+                duLieuSau:
+                    formatAccountData(
+                        updatedAccount
+                    ),
+                lyDo: auditInfo.lyDo ?? null,
+                ip: auditContext.ip ?? null,
+                userAgent: auditContext.userAgent ?? null
+            }
+        )
+
         await transaction.commit()
         transactionStarted = false
 
-        return formatUpdatedAccount(updatedAccount)
+        return formatAccountData(updatedAccount)
     }
 
     catch (error) {
@@ -90,8 +112,13 @@ async function getAccountByIdWorkflow(accountId) {
 }
 
 
-async function restrictAccountWorkflow(adminId, accountId, data) {
-    return executeAccountUpdate(adminId, accountId,
+async function restrictAccountWorkflow(adminId, accountId, data, auditContext = {}) {
+    return executeAccountUpdate(adminId, accountId, auditContext,
+        {
+            hanhDong: 'Hạn chế tài khoản',
+            lyDo: data.reason
+        },
+
         account => {
             if (account.TRANGTHAI !== 'Hoạt động') {
                 throw createError('Chỉ tài khoản đang hoạt động mới có thể bị hạn chế!', 409)
@@ -103,8 +130,12 @@ async function restrictAccountWorkflow(adminId, accountId, data) {
 }
 
 
-async function unrestrictAccountWorkflow(adminId, accountId) {
-    return executeAccountUpdate(adminId, accountId,
+async function unrestrictAccountWorkflow(adminId, accountId, auditContext = {}) {
+    return executeAccountUpdate(adminId, accountId, auditContext,
+        {
+            hanhDong: 'Bỏ hạn chế tài khoản',
+            lyDo: null
+        },
 
         account => {
             if (account.TRANGTHAI !== 'Bị hạn chế') {
@@ -117,8 +148,12 @@ async function unrestrictAccountWorkflow(adminId, accountId) {
 }
 
 
-async function temporaryLockAccountWorkflow(adminId, accountId, data) {
-    return executeAccountUpdate(adminId, accountId,
+async function temporaryLockAccountWorkflow(adminId, accountId, data, auditContext = {}) {
+    return executeAccountUpdate(adminId, accountId, auditContext,
+        {
+            hanhDong: 'Tạm khóa tài khoản',
+            lyDo: data.reason
+        },
 
         account => {
             const validStatuses = [
@@ -136,8 +171,12 @@ async function temporaryLockAccountWorkflow(adminId, accountId, data) {
 }
 
 
-async function unlockAccountWorkflow(adminId, accountId) {
-    return executeAccountUpdate(adminId, accountId,
+async function unlockAccountWorkflow(adminId, accountId, auditContext = {}) {
+    return executeAccountUpdate(adminId, accountId, auditContext,
+        {
+            hanhDong: 'Mở khóa tài khoản',
+            lyDo: null
+        },
 
         account => {
             if (account.TRANGTHAI !== 'Tạm khóa') {
@@ -150,8 +189,12 @@ async function unlockAccountWorkflow(adminId, accountId) {
 }
 
 
-async function permanentLockAccountWorkflow(adminId, accountId, data) {
-    return executeAccountUpdate(adminId, accountId,
+async function permanentLockAccountWorkflow(adminId, accountId, data, auditContext = {}) {
+    return executeAccountUpdate(adminId, accountId, auditContext,
+        {
+            hanhDong: 'Khóa vĩnh viễn tài khoản',
+            lyDo: data.reason
+        },
 
         account => {
             if (account.TRANGTHAI === 'Đã khóa') {
