@@ -28,7 +28,47 @@ const {
     createReportResolvedNotifications: createReportResolvedNotificationsService
 } = require('./notificationService')
 
-async function claimReportWorkflow(maBC, adminId) {
+const {
+    insertAdminAuditLog: insertAdminAuditLogService
+} = require('./adminAuditService')
+
+
+function formatReportData(report) {
+    return {
+        maBC: report.MABC,
+        nguoiBaoCao: report.NGUOIBAOCAO,
+        nguoiBiBaoCao: report.NGUOIBIBAOCAO,
+        doiTuongBaoCao: report.DOITUONGBAOCAO,
+        maDH: report.MADH,
+        maTN: report.MATN,
+        loaiBaoCao: report.LOAIBAOCAO,
+        trangThai: report.TRANGTHAI,
+        nguoiXuLy: report.NGUOIXULY,
+        ketQuaXuLy: report.KETQUAXULY,
+        ngayXuLy: report.NGAYXULY
+    }
+}
+
+
+async function insertReportAuditLog(transaction, adminId, hanhDong, reportBefore, reportAfter, auditContext, options = {}) {
+    await insertAdminAuditLogService(transaction, {
+        adminId,
+        hanhDong,
+        doiTuong: 'Báo cáo',
+        maDoiTuong: reportBefore.MABC,
+        duLieuTruoc: formatReportData(reportBefore),
+        duLieuSau: {
+            ...formatReportData(reportAfter),
+            ...options.duLieuBoSung
+        },
+        lyDo: options.lyDo ?? null,
+        ip: auditContext.ip ?? null,
+        userAgent: auditContext.userAgent ?? null
+    })
+}
+
+
+async function claimReportWorkflow(maBC, adminId, auditContext = {}) {
     const transaction = new sql.Transaction()
     let transactionStarted = false
 
@@ -42,6 +82,8 @@ async function claimReportWorkflow(maBC, adminId) {
         validateReportClaimService(report, adminId)
 
         const claimedReport = await claimReportService(transaction, report.MABC, adminId)
+
+        await insertReportAuditLog(transaction, adminId, 'Nhận xử lý báo cáo', report, claimedReport, auditContext)
 
         await transaction.commit()
         transactionStarted = false
@@ -75,7 +117,7 @@ async function claimReportWorkflow(maBC, adminId) {
 
 
 
-async function resolveReportWorkflow(maBC, adminId, data) {
+async function resolveReportWorkflow(maBC, adminId, data, auditContext = {}) {
     const transaction = new sql.Transaction()
     let transactionStarted = false
 
@@ -94,6 +136,7 @@ async function resolveReportWorkflow(maBC, adminId, data) {
         let exchangeProposal = null
         let exchangeTextbooks = null
         let processedExchangeTextbook = null
+        let xuLyTraoDoi = null
 
         if (report.DOITUONGBAOCAO === 'Giao dịch' && report.MADH) {
             exchangeProposal = await getExchangeProposalForOrderWithLockService(transaction, report.MADH)
@@ -110,6 +153,8 @@ async function resolveReportWorkflow(maBC, adminId, data) {
                 if (data.ketLuan === 'Hợp lệ') {
                     if (exchangeProposal) {
                         await releaseExchangeTextbookQuantityService(transaction, exchangeProposal, order.TRANGTHAI)
+
+                        xuLyTraoDoi = 'Trả số lượng đang giữ'
                     }
 
                     await cancelOrderAndReleaseQuantityService(transaction, order)
@@ -120,6 +165,8 @@ async function resolveReportWorkflow(maBC, adminId, data) {
                 else {
                     if (exchangeProposal) {
                         processedExchangeTextbook = await completeExchangeTextbookAndDeductQuantityService(transaction, exchangeProposal)
+
+                        xuLyTraoDoi = 'Hoàn tất và trừ số lượng'
                     }
 
                     const completion = await completeDisputedOrderAndDeductQuantityService(transaction, order)
@@ -133,6 +180,17 @@ async function resolveReportWorkflow(maBC, adminId, data) {
         const resolvedReport = await resolveReportService(transaction, report.MABC, adminId, data)
         const notifications = await createReportResolvedNotificationsService(transaction, report, data)
 
+        await insertReportAuditLog(transaction, adminId, 'Kết luận báo cáo', report, resolvedReport, auditContext,
+            {
+                lyDo: data.ketQuaXuLy,
+                duLieuBoSung: {
+                    trangThaiDonHang,
+                    ngayHoanThanh,
+                    xuLyTraoDoi
+                }
+            }
+        )
+        
         await transaction.commit()
         transactionStarted = false
 
@@ -162,17 +220,13 @@ async function resolveReportWorkflow(maBC, adminId, data) {
         }
 
 
-        if (exchangeProposal && exchangeTextbooks) {
+        if (exchangeProposal && exchangeTextbooks && xuLyTraoDoi) {
             result.traoDoi = {
                 maGTDuocDoi: exchangeProposal.MAGTDUOCDOI,
                 maGTMangDoi: exchangeProposal.MAGTMANGDOI,
                 tenGTMangDoi: exchangeTextbooks.exchangeTextbook.TENGT,
                 soLuongMangDoi: exchangeProposal.SOLUONGMANGDOI,
-                xuLy:
-                    data.ketLuan === 'Hợp lệ'
-                        ? 'Đã trả số lượng đang giữ'
-                        : 'Đã trừ số lượng',
-
+                xuLy: xuLyTraoDoi,
                 soLuongMangDoiConLai:
                     processedExchangeTextbook
                         ? processedExchangeTextbook.SOLUONG

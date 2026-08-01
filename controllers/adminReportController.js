@@ -75,7 +75,7 @@ async function claimReport(req, res) {
     }
 
     try {
-        const report = await claimReportWorkflow(validation.data.maBC, req.user.MATK)
+        const report = await claimReportWorkflow(validation.data.maBC, req.user.MATK, getAuditContext(req))
 
         return res.status(200).json({message: 'Nhận xử lý báo cáo thành công!', report})
     }
@@ -100,7 +100,7 @@ async function resolveReport(req, res) {
     }
 
     try {
-        const report = await resolveReportWorkflow(idValidation.data.maBC, req.user.MATK, bodyValidation.data)
+        const report = await resolveReportWorkflow(idValidation.data.maBC, req.user.MATK, bodyValidation.data, getAuditContext(req))
 
         return res.status(200).json({message: 'Kết luận báo cáo thành công!', report})
     }
@@ -109,6 +109,20 @@ async function resolveReport(req, res) {
         return handleAdminReportError(res, error, 'kết luận báo cáo')
     }
 }
+
+function getAuditContext(req) {
+    const ip = typeof req.ip === 'string' ? req.ip.slice(0, 45) : null
+    const userAgent = req.get('user-agent')
+
+    return {
+        ip,
+        userAgent:
+            typeof userAgent === 'string'
+                ? userAgent.slice(0, 500)
+                : null
+    }
+}
+
 
 module.exports = {
     getAdminReports,

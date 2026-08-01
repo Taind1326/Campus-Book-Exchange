@@ -71,14 +71,16 @@ async function getAdminReportDetail(maBC) {
     return result.recordset[0]
 }
 
+
 async function getReportForProcessingWithLock(transaction, maBC) {
     const request = new sql.Request(transaction)
 
     request.input('MABC', sql.BigInt, maBC)
 
     const result = await request.query(`
-        SELECT MABC, NGUOIBAOCAO, NGUOIBIBAOCAO, DOITUONGBAOCAO, MADH,
-                MATN, LOAIBAOCAO, TRANGTHAI, NGUOIXULY
+        SELECT MABC, NGUOIBAOCAO, NGUOIBIBAOCAO,
+               DOITUONGBAOCAO, MADH, MATN, LOAIBAOCAO,
+               TRANGTHAI, NGUOIXULY, KETQUAXULY, NGAYXULY
         FROM BAOCAO WITH (UPDLOCK, HOLDLOCK)
         WHERE MABC = @MABC`)
 
@@ -118,14 +120,9 @@ async function claimReport(transaction, maBC, adminId) {
         SET TRANGTHAI = N'Đang xử lý',
             NGUOIXULY = @NGUOIXULY
 
-        OUTPUT
-            INSERTED.MABC,
-            INSERTED.DOITUONGBAOCAO,
-            INSERTED.MADH,
-            INSERTED.MATN,
-            INSERTED.LOAIBAOCAO,
-            INSERTED.TRANGTHAI,
-            INSERTED.NGUOIXULY
+        OUTPUT INSERTED.MABC, INSERTED.NGUOIBAOCAO, INSERTED.NGUOIBIBAOCAO, INSERTED.DOITUONGBAOCAO,
+                INSERTED.MADH, INSERTED.MATN, INSERTED.LOAIBAOCAO, INSERTED.TRANGTHAI, INSERTED.NGUOIXULY,
+                INSERTED.KETQUAXULY, INSERTED.NGAYXULY
 
         WHERE MABC = @MABC
           AND TRANGTHAI = N'Chờ xử lý'
@@ -143,32 +140,20 @@ async function claimReport(transaction, maBC, adminId) {
 
 
 function validateReportResolution(report, adminId) {
-    if (
-        report.NGUOIBAOCAO === adminId ||
-        report.NGUOIBIBAOCAO === adminId
-    ) {
-        const error = new Error(
-            'Bạn không thể kết luận báo cáo có liên quan đến tài khoản của mình!'
-        )
-
+    if (report.NGUOIBAOCAO === adminId || report.NGUOIBIBAOCAO === adminId) {
+        const error = new Error('Bạn không thể kết luận báo cáo có liên quan đến tài khoản của mình!')
         error.status = 403
         throw error
     }
 
     if (report.TRANGTHAI !== 'Đang xử lý') {
-        const error = new Error(
-            'Chỉ báo cáo đang xử lý mới có thể được kết luận!'
-        )
-
+        const error = new Error('Chỉ báo cáo đang xử lý mới có thể được kết luận!')
         error.status = 409
         throw error
     }
 
     if (report.NGUOIXULY !== adminId) {
-        const error = new Error(
-            'Chỉ Admin đã nhận báo cáo mới được quyền kết luận!'
-        )
-
+        const error = new Error('Chỉ Admin đã nhận báo cáo mới được quyền kết luận!')
         error.status = 403
         throw error
     }
