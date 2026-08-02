@@ -1,12 +1,14 @@
-require('dotenv').config({
-    override: true
-})
+require('dotenv').config()
+
 const http = require('http')
 const {Server} = require('socket.io')
 const express = require('express')
+const cors = require('cors')
+const helmet = require('helmet')
 const {sql, connectDB} = require('./config/db')
 const {setIO} = require('./config/socket')
 const {initializeSocket} = require('./sockets/socketServer')
+const {corsOptions} = require('./config/cors')
 const textBookRoutes = require('./routes/textbookRoutes')
 const authRoutes = require('./routes/authRoutes')
 const courseRoutes = require('./routes/courseRoutes')
@@ -26,6 +28,7 @@ const adminAuditRoutes = require('./routes/adminAuditRoutes')
 
 
 const app = express()
+app.disable('x-powered-by')
 
 if (process.env.NODE_ENV === 'production') {
     app.set('trust proxy', 1)
@@ -33,19 +36,32 @@ if (process.env.NODE_ENV === 'production') {
 
 const server = http.createServer(app)
 
-const io = new Server(server, {
-    cors: {
-        origin: '*',
-        methods: ['GET', 'POST', 'PATCH']
-    }
-})
+const io = new Server(server, {cors: corsOptions})
 setIO(io)
 
 initializeSocket(io)
 
 const PORT = Number(process.env.PORT || 3000)
 
-app.use(express.json())
+const helmetOptions = {
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: {policy: 'cross-origin'}
+}
+
+if (process.env.NODE_ENV !== 'production') {
+    helmetOptions.strictTransportSecurity = false
+}
+
+app.use(helmet(helmetOptions))
+app.use(cors(corsOptions))
+app.use(express.json({
+    limit: '100kb'
+}))
+
+app.use(express.urlencoded({
+    extended: true,
+    limit: '100kb'
+}))
 
 app.use('/auth', authRoutes)
 app.use('/giaotrinh', textBookRoutes)
@@ -89,6 +105,46 @@ async function startServer() {
         console.log('Không thể khởi động server: ',error.message)
     }
 }
+
+app.use((req, res) => {
+    return res.status(404).json({message: 'Không tìm thấy API!'})
+})
+
+
+app.use((error, req, res, next) => {
+    if (res.headersSent) {
+        return next(error)
+    }
+
+    if (error.type === 'entity.too.large') {
+        return res.status(413).json({message: 'Dữ liệu gửi lên vượt quá giới hạn cho phép!'})
+    }
+
+    if (error instanceof SyntaxError && error.status === 400 && error.type === 'entity.parse.failed') {
+        return res.status(400).json({message: 'Dữ liệu JSON không hợp lệ!'})
+    }
+
+    if (error.name === 'MulterError') {
+        const multerMessages = {
+            LIMIT_FILE_SIZE: 'Ảnh không được vượt quá 5 MB!',
+
+            LIMIT_FILE_COUNT: 'Chỉ được tải lên tối đa 5 ảnh!',
+
+            LIMIT_UNEXPECTED_FILE: 'Trường tải ảnh không hợp lệ!'
+        }
+
+        return res.status(400).json({
+            message: multerMessages[error.code] || 'Dữ liệu ảnh tải lên không hợp lệ!'})
+    }
+
+    if (error.status) {
+        return res.status(error.status).json({message: error.message})
+    }
+
+    console.error('Lỗi server chưa được xử lý:', error)
+
+    return res.status(500).json({message: 'Đã xảy ra lỗi hệ thống!'})
+})
 
 
 startServer()
