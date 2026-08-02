@@ -9,6 +9,7 @@ const {sql, connectDB} = require('./config/db')
 const {setIO} = require('./config/socket')
 const {initializeSocket} = require('./sockets/socketServer')
 const {corsOptions} = require('./config/cors')
+const {apiRateLimit} = require('./middlewares/apiRateLimit')
 const textBookRoutes = require('./routes/textbookRoutes')
 const authRoutes = require('./routes/authRoutes')
 const courseRoutes = require('./routes/courseRoutes')
@@ -36,7 +37,14 @@ if (process.env.NODE_ENV === 'production') {
 
 const server = http.createServer(app)
 
-const io = new Server(server, {cors: corsOptions})
+const io = new Server(server, {
+    cors: corsOptions,
+    serveClient: false,
+    connectTimeout: 10 * 1000,
+    maxHttpBufferSize: 100 * 1024,
+    perMessageDeflate: false
+})
+
 setIO(io)
 
 initializeSocket(io)
@@ -54,6 +62,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 app.use(helmet(helmetOptions))
 app.use(cors(corsOptions))
+app.use(apiRateLimit)
 app.use(express.json({
     limit: '100kb'
 }))

@@ -1,98 +1,71 @@
-const requestBuckets = new Map()
+const {
+    rateLimit,
+    ipKeyGenerator
+} = require('express-rate-limit')
 
 
-function createAuthRateLimit(windowMs, maxRequests, message) {
-    return function authRateLimit(req, res, next) {
-        const key = `${req.ip}:${req.baseUrl}${req.path}`
-
-        const now = Date.now()
-
-        const current = requestBuckets.get(key)
-
-        // Chưa có bucket hoặc bucket cũ đã hết hạn
-        if (!current || current.resetAt <= now) {
-            requestBuckets.set(key, {
-                count: 1,
-                resetAt: now + windowMs
-            })
-
-            return next()
-        }
-
-        // Đã vượt quá số request cho phép
-        if ( current.count >= maxRequests) {
-            const retryAfter = Math.ceil((current.resetAt - now) / 1000)
-            res.set( 'Retry-After', String(retryAfter))
-
-            return res.status(429).json({message})
-        }
-
-        current.count += 1
-
-        return next()
+function createAuthRateLimit(options) {
+    const limiterOptions = {
+        windowMs: options.windowMs,
+        limit: options.limit,
+        standardHeaders: 'draft-7',
+        legacyHeaders: false,
+        message: { message: options.message},
+        skipSuccessfulRequests: options.skipSuccessfulRequests || false
     }
+
+    if (typeof options.keyGenerator === 'function') {
+        limiterOptions.keyGenerator = options.keyGenerator
+    }
+
+    return rateLimit(limiterOptions)
 }
 
 
-// Dọn các bucket đã hết hạn mỗi 10 phút
-const cleanupInterval = setInterval(() => {
-        const now = Date.now()
-
-        for (const [key, value] of requestBuckets) {
-            if (value.resetAt <= now) {
-                requestBuckets.delete(key)
-            }
-        }
-    },
-
-    10 * 60 * 1000
-)
-
-/*
-    Không để interval giữ Node.js chạy
-    khi server cần dừng.
-*/
-cleanupInterval.unref()
+function loginKeyGenerator(req) {
+    const ip = ipKeyGenerator(req.ip)
+    const username = typeof req.body?.TENTK === 'string' ? req.body.TENTK.trim().toLowerCase() : 'unknown'
+    return `${ip}:${username}`
+}
 
 
-const registerRateLimit =
-    createAuthRateLimit(60 * 60 * 1000, 3, 'Bạn đã đăng ký quá nhiều lần. ' + 'Vui lòng thử lại sau!')
+const registerRateLimit = createAuthRateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 3,
+    message: 'Bạn đã đăng ký quá nhiều lần. ' + 'Vui lòng thử lại sau!'
+})
 
 
-const loginRateLimit =
-    createAuthRateLimit(
-        15 * 60 * 1000,
-        10,
-        'Bạn đã đăng nhập quá nhiều lần. ' +
-        'Vui lòng thử lại sau!'
-    )
+const loginRateLimit = createAuthRateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    message: 'Bạn đã đăng nhập quá nhiều lần. ' + 'Vui lòng thử lại sau!',
+    skipSuccessfulRequests: true,
+    keyGenerator: loginKeyGenerator
+})
 
 
-const verifyOtpRateLimit =
-    createAuthRateLimit(
-        15 * 60 * 1000,
-        10,
-        'Bạn đã nhập OTP quá nhiều lần. ' +
-        'Vui lòng thử lại sau!'
-    )
+const verifyOtpRateLimit = createAuthRateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    message: 'Bạn đã nhập OTP quá nhiều lần. ' + 'Vui lòng thử lại sau!',
+    skipSuccessfulRequests: true
+})
 
 
-const resendOtpRateLimit =
-    createAuthRateLimit(
-        60 * 60 * 1000,
-        10,
-        'Bạn đã yêu cầu gửi OTP quá nhiều lần. ' +
-        'Vui lòng thử lại sau!'
-    )
+const resendOtpRateLimit = createAuthRateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 10,
+    message: 'Bạn đã yêu cầu gửi OTP quá nhiều lần. ' + 'Vui lòng thử lại sau!'
+})
 
 
-const createAccountRateLimit =
-    createAuthRateLimit(
-        15 * 60 * 1000,
-        10,
-        'Bạn đã tạo tài khoản quá nhiều lần. ' +
-        'Vui lòng thử lại sau!'
-    )
+const createAccountRateLimit = createAuthRateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    message: 'Bạn đã tạo tài khoản quá nhiều lần. ' + 'Vui lòng thử lại sau!',
+    skipSuccessfulRequests: true
+})
 
 
 module.exports = {
