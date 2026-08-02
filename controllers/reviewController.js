@@ -1,6 +1,11 @@
 const { createReview: createReviewService} = require('../services/reviewWorkflowService')
 const {getReviewsBySeller, getSellerReviewStatistics} = require('../services/reviewService')
-const {validateCreateReview, validateSellerId} = require('../validators/reviewValidator')
+
+const {
+    validateCreateReview,
+    validateSellerId,
+    validateReviewListQuery
+} = require('../validators/reviewValidator')
 
 
 async function createReview(req, res) {
@@ -25,22 +30,29 @@ async function createReview(req, res) {
 
 
 async function getSellerReviews(req, res) {
-    const validation = validateSellerId(req.params.maTK)
+    const sellerValidation = validateSellerId(req.params.maTK)
 
-    if (!validation.isValid) {
-        return res.status(validation.status).json({message: validation.message})
+    if (!sellerValidation.isValid) {
+        return res.status(sellerValidation.status).json({message: sellerValidation.message})
+    }
+
+    const queryValidation = validateReviewListQuery(req.query)
+
+    if (!queryValidation.isValid) {
+        return res.status(queryValidation.status).json({message: queryValidation.message})
     }
 
     try {
-        const reviews = await getReviewsBySeller(validation.data)
+        const result = await getReviewsBySeller(sellerValidation.data, queryValidation.data.page, queryValidation.data.limit)
 
-        return res.status(200).json({reviews})
+        return res.status(200).json(result)
     }
 
     catch (error) {
         console.log('Lỗi lấy đánh giá người bán: ', error)
 
-        return res.status(error.status || error.statusCode || 500).json({message: error.status || error.statusCode  ? error.message: 'Không thể lấy danh sách đánh giá!'})
+        return res.status(error.status || error.statusCode || 500).json({
+                message: error.status || error.statusCode ? error.message : 'Không thể lấy danh sách đánh giá!'})
     }
 }
 

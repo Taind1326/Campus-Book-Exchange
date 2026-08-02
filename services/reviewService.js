@@ -76,20 +76,43 @@ async function insertReview(transaction, data, nguoiDanhGia, nguoiBan) {
 }
 
 
-async function getReviewsBySeller(maTK) {
+async function getReviewsBySeller(maTK, page, limit) {
     const request = new sql.Request()
+    const offset = (page - 1) * limit
 
     request.input('MATK', sql.Int, maTK)
+    request.input('OFFSET', sql.Int, offset)
+    request.input('LIMIT', sql.Int, limit)
 
     const result = await request.query(`
         SELECT DG.MADG, DG.MADH, DG.NGUOIDANHGIA, TK.TENTK AS NGUOIDANHGIATEN,
-                DG.NGUOIDUOCDANHGIA, DG.SOSAO, DG.BINHLUAN, DG.NGAYDANHGIA
+                DG.NGUOIDUOCDANHGIA, DG.SOSAO, DG.BINHLUAN, DG.NGAYDANHGIA, COUNT(*) OVER() AS TONGSO
         FROM DANHGIA DG
         JOIN TAIKHOAN TK ON TK.MATK = DG.NGUOIDANHGIA
         WHERE DG.NGUOIDUOCDANHGIA = @MATK
-        ORDER BY DG.NGAYDANHGIA DESC`)
+        ORDER BY DG.NGAYDANHGIA DESC, DG.MADG DESC
+        OFFSET @OFFSET ROWS
+        FETCH NEXT @LIMIT ROWS ONLY`)
 
-    return result.recordset
+    const totalItems = result.recordset.length > 0 ? Number(result.recordset[0].TONGSO) : 0
+
+    const items = result.recordset.map(review => {
+        const {
+            TONGSO,
+            ...reviewData
+        } = review
+
+        return reviewData
+    })
+
+    return {
+        items,
+        page,
+        limit,
+        totalItems,
+        totalPages:
+            Math.ceil(totalItems / limit)
+    }
 }
 
 
