@@ -5,7 +5,7 @@ const {Server} = require('socket.io')
 const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
-const {sql, connectDB} = require('./config/db')
+const {connectDB} = require('./config/db')
 const {setIO} = require('./config/socket')
 const {initializeSocket} = require('./sockets/socketServer')
 const {corsOptions} = require('./config/cors')
@@ -62,6 +62,11 @@ if (process.env.NODE_ENV !== 'production') {
 
 app.use(helmet(helmetOptions))
 app.use(cors(corsOptions))
+
+app.get('/health', (req, res) => {
+    return res.status(200).json({status: 'ok'})
+})
+
 app.use(apiRateLimit)
 app.use(express.json({
     limit: '100kb'
@@ -90,16 +95,8 @@ app.use('/admin/accounts', adminAccountRoutes)
 app.use('/admin/audits', adminAuditRoutes)
 
 
-app.get('/', async (req, res) => {
-    try {
-        const result = await sql.query`SELECT GETDATE() AS time`
-        res.status(200).json(result.recordset[0])
-    }
-
-    catch(error){
-        console.log(error)
-        res.status(500).json({message: 'Lỗi kiểm tra kết nối server!'})
-    }
+app.get('/', (req, res) => {
+    return res.status(200).json({name: 'Campus Book Exchange API', status: 'running'})
 })
 
 
