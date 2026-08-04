@@ -6,21 +6,42 @@ const { getPublicTextbooks,
         deleteTextbook: deleteTextbookService
     } = require('../services/textbookService')
 
-const {validateCreateTextbook, validateUpdateTextbook} = require('../validators/textbookValidator')
+const {
+    validateCreateTextbook,
+    validateUpdateTextbook,
+    validatePublicTextbookListQuery
+} = require('../validators/textbookValidator')
 
 
 async function getAllTextbooks(req, res) {
-    try{
-        const textbooks = await getPublicTextbooks()
-        return res.status(200).json(textbooks)
+    const validation =
+        validatePublicTextbookListQuery(req.query)
+
+    if (!validation.isValid) {
+        return res.status(validation.status).json({
+            message: validation.message
+        })
     }
 
-    catch(error){
-        console.log('Lỗi lấy danh sách giáo trình!', error)
-        return res.status(500).json({message:'Không thể lấy danh sách giáo trình!'})
+    try {
+        const result =
+            await getPublicTextbooks(validation.data)
+
+        return res.status(200).json(result)
+    }
+
+    catch (error) {
+        console.log(
+            'Lỗi lấy danh sách giáo trình:',
+            error
+        )
+
+        return res.status(500).json({
+            message:
+                'Không thể lấy danh sách giáo trình!'
+        })
     }
 }
-
 
 async function getTextbookById(req, res) {
     const maGT = Number(req.params.id)

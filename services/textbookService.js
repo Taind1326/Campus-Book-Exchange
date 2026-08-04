@@ -230,13 +230,154 @@ async function deleteTextbook(maGT, nguoiDang) {
 }
 
 
-async function getPublicTextbooks() {
-    const result = await sql.query`
-        SELECT MAGT, TENGT, TENMH, SOLUONG, DONGIA, LOAI, MOTA, TENTK, NGAYDANG, ANHDAIDIEN
-        FROM V_GIAOTRINH_CONGKHAI
-        ORDER BY NGAYDANG DESC`
+async function getPublicTextbooks(filters) {
+    const request = new sql.Request()
+    const offset = (filters.page - 1) * filters.limit
 
-    return result.recordset
+    request.input('TUKHOA', sql.NVarChar(300), filters.tuKhoa)
+    request.input('MAHOCPHAN', sql.VarChar(20), filters.maHocPhan)
+    request.input('LOAI', sql.NVarChar(50), filters.loai)
+    request.input('GIATU', sql.Decimal(12, 0), filters.giaTu)
+    request.input('GIADEN', sql.Decimal(12, 0), filters.giaDen)
+    request.input('SAPXEP', sql.VarChar(20), filters.sapXep)
+    request.input('OFFSET', sql.Int, offset)
+    request.input('LIMIT', sql.Int, filters.limit)
+
+    const result = await request.query(`
+        SELECT
+            GT.MAGT,
+            GT.TENGT,
+            GT.MAHOCPHAN,
+            MH.TENMH,
+            GT.SOLUONG,
+            GT.DONGIA,
+            GT.LOAI,
+            GT.MOTA,
+            TK.TENTK,
+            GT.NGAYDANG,
+            HA.DUONGDAN AS ANHDAIDIEN,
+            COUNT(*) OVER() AS TONGSO
+
+        FROM GIAOTRINH GT
+
+        JOIN MONHOC MH
+            ON MH.MAHOCPHAN = GT.MAHOCPHAN
+
+        JOIN TAIKHOAN TK
+            ON TK.MATK = GT.NGUOIDANG
+
+        OUTER APPLY (
+            SELECT TOP (1)
+                H.DUONGDAN
+
+            FROM HINHANHGIAOTRINH H
+
+            WHERE H.MAGT = GT.MAGT
+
+            ORDER BY H.THUTU ASC
+        ) HA
+
+        WHERE GT.TRANGTHAI = N'Đang hiển thị'
+
+            AND TK.TRANGTHAI NOT IN (
+                N'Tạm khóa',
+                N'Đã khóa'
+            )
+
+            AND (
+                @TUKHOA IS NULL
+
+                OR GT.TENGT
+                    LIKE N'%' + @TUKHOA + N'%'
+
+                OR MH.TENMH
+                    LIKE N'%' + @TUKHOA + N'%'
+
+                OR GT.MAHOCPHAN
+                    LIKE '%' + @TUKHOA + '%'
+            )
+
+            AND (
+                @MAHOCPHAN IS NULL
+                OR GT.MAHOCPHAN = @MAHOCPHAN
+            )
+
+            AND (
+                @LOAI IS NULL
+                OR GT.LOAI = @LOAI
+            )
+
+            AND (
+                (
+                    @GIATU IS NULL
+                    AND @GIADEN IS NULL
+                )
+
+                OR (
+                    GT.LOAI = N'Bán'
+
+                    AND (
+                        @GIATU IS NULL
+                        OR GT.DONGIA >= @GIATU
+                    )
+
+                    AND (
+                        @GIADEN IS NULL
+                        OR GT.DONGIA <= @GIADEN
+                    )
+                )
+            )
+
+        ORDER BY
+            CASE
+                WHEN @SAPXEP = 'moi-nhat'
+                    THEN GT.NGAYDANG
+            END DESC,
+
+            CASE
+                WHEN @SAPXEP = 'cu-nhat'
+                    THEN GT.NGAYDANG
+            END ASC,
+
+            CASE
+                WHEN @SAPXEP = 'gia-thap'
+                    THEN GT.DONGIA
+            END ASC,
+
+            CASE
+                WHEN @SAPXEP = 'gia-cao'
+                    THEN GT.DONGIA
+            END DESC,
+
+            GT.MAGT DESC
+
+        OFFSET @OFFSET ROWS
+        FETCH NEXT @LIMIT ROWS ONLY
+    `)
+
+    const totalItems =
+        result.recordset.length > 0
+            ? Number(result.recordset[0].TONGSO)
+            : 0
+
+    const items = result.recordset.map(textbook => {
+        const {
+            TONGSO,
+            ...textbookData
+        } = textbook
+
+        return textbookData
+    })
+
+    return {
+        items,
+        page: filters.page,
+        limit: filters.limit,
+        totalItems,
+        totalPages: Math.ceil(
+            totalItems / filters.limit
+        )
+    }
 }
 
 
