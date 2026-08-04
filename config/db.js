@@ -40,7 +40,9 @@ function getDatabaseConfig() {
             trustServerCertificate:
                 String(
                     process.env.DB_TRUST_SERVER_CERTIFICATE
-                ).toLowerCase() === 'true'
+                ).toLowerCase() === 'true',
+
+            useUTC: false
         }
     }
 }
