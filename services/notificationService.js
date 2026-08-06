@@ -19,23 +19,31 @@ async function insertNotification(transaction, data) {
         OUTPUT INSERTED.MATB, INSERTED.NGUOINHAN, INSERTED.TIEUDE, INSERTED.NOIDUNG,
                 INSERTED.LOAI, INSERTED.MADH, INSERTED.MAGT, INSERTED.MACUOC,
                 INSERTED.MATN, INSERTED.MADG, INSERTED.DUONGDAN, INSERTED.DADOC, INSERTED.THOIGIAN
-        VALUES (@NGUOINHAN, @TIEUDE, @NOIDUNG, @LOAI, @MADH, @MAGT, @MACUOC, @MATN, @MADG, @DUONGDAN)`)
+                VALUES (
+            @NGUOINHAN,
+            @TIEUDE,
+            @NOIDUNG,
+            @LOAI,
+            @MADH,
+            @MAGT,
+            COALESCE(
+                @MACUOC,
+                (
+                    SELECT TOP (1)
+                        C.MACUOC
+                    FROM CUOCTROCHUYEN C
+                    WHERE C.MADH = @MADH
+                    ORDER BY C.MACUOC DESC
+                )
+            ),
+            @MATN,
+            @MADG,
+            @DUONGDAN
+        )`)
 
     return result.recordset[0]
 }
 
-
-async function createOrderNotification(transaction, textbook, maDH, maCuoc) {
-    return insertNotification(transaction, {
-        nguoiNhan: textbook.NGUOIDANG,
-        tieuDe: 'Yêu cầu giao dịch mới',
-        noiDung: `Bạn có một yêu cầu giao dịch mới cho giáo trình "${textbook.TENGT}".`,
-        loai: 'Đơn hàng',
-        maDH,
-        maGT: textbook.MAGT,
-        maCuoc
-    })
-}
 
 
 async function createOrderConfirmedNotification(transaction, order) {
@@ -391,6 +399,29 @@ async function createTextbookDeletedNotification(transaction, textbook) {
         duongDan: '/giaotrinh/my'
     })
 }
+
+
+async function createOrderNotification(
+    transaction,
+    textbook,
+    maDH,
+    maCuoc
+) {
+    return insertNotification(transaction, {
+        nguoiNhan: textbook.NGUOIDANG,
+        tieuDe: 'Yêu cầu giao dịch mới',
+        noiDung:
+            `Bạn có một yêu cầu giao dịch mới ` +
+            `cho giáo trình "${textbook.TENGT}".`,
+        loai: 'Đơn hàng',
+        maDH,
+        maGT: textbook.MAGT,
+        maCuoc,
+        duongDan:
+            `/chat?conversationId=${maCuoc}`
+    })
+}
+
 
 module.exports = {
     insertNotification,
