@@ -254,6 +254,11 @@ async function getPublicTextbooks(filters) {
             GT.LOAI,
             GT.MOTA,
             TK.TENTK,
+            GT.NGUOIDANG,
+            ISNULL(UY.DIEMTRUNGBINH, 0)
+                AS DIEMTRUNGBINH,
+            ISNULL(UY.SOLUOTDANHGIA, 0)
+                AS SOLUOTDANHGIA,
             GT.NGAYDANG,
             HA.DUONGDAN AS ANHDAIDIEN,
             COUNT(*) OVER() AS TONGSO
@@ -265,6 +270,9 @@ async function getPublicTextbooks(filters) {
 
         JOIN TAIKHOAN TK
             ON TK.MATK = GT.NGUOIDANG
+
+            LEFT JOIN V_UYTIN_TAIKHOAN UY
+    ON UY.MATK = GT.NGUOIDANG
 
         OUTER APPLY (
             SELECT TOP (1)
@@ -384,36 +392,81 @@ async function getPublicTextbooks(filters) {
 async function getTextbookById(maGT) {
     const textbookRequest = new sql.Request()
 
-    textbookRequest.input('MAGT', sql.Int, maGT)
+    textbookRequest.input(
+        'MAGT',
+        sql.Int,
+        maGT
+    )
 
-    const textbookResult = await textbookRequest.query(`
-        SELECT GT.MAGT, GT.TENGT, GT.SOLUONG, GT.DONGIA,
-                GT.MOTA, GT.LOAI, GT.TRANGTHAI, GT.NGAYDANG,
-                MH.TENMH, TK.TENTK
-                
-        FROM GIAOTRINH GT
-        JOIN MONHOC MH ON GT.MAHOCPHAN = MH.MAHOCPHAN
-        JOIN TAIKHOAN TK ON GT.NGUOIDANG = TK.MATK
-        WHERE GT.MAGT = @MAGT
-        AND GT.TRANGTHAI = N'Đang hiển thị'`)
+    const textbookResult =
+        await textbookRequest.query(`
+            SELECT
+                GT.MAGT,
+                GT.TENGT,
+                GT.SOLUONG,
+                GT.DONGIA,
+                GT.MOTA,
+                GT.LOAI,
+                GT.TRANGTHAI,
+                GT.NGAYDANG,
+                GT.NGUOIDANG,
+                MH.TENMH,
+                TK.TENTK,
+                ISNULL(
+                    UY.DIEMTRUNGBINH,
+                    0
+                ) AS DIEMTRUNGBINH,
+                ISNULL(
+                    UY.SOLUOTDANHGIA,
+                    0
+                ) AS SOLUOTDANHGIA
 
-    if (textbookResult.recordset.length === 0){
+            FROM GIAOTRINH GT
+
+            JOIN MONHOC MH
+                ON GT.MAHOCPHAN =
+                    MH.MAHOCPHAN
+
+            JOIN TAIKHOAN TK
+                ON GT.NGUOIDANG =
+                    TK.MATK
+
+            LEFT JOIN V_UYTIN_TAIKHOAN UY
+                ON UY.MATK =
+                    GT.NGUOIDANG
+
+            WHERE GT.MAGT = @MAGT
+              AND GT.TRANGTHAI =
+                    N'Đang hiển thị'
+        `)
+
+    if (
+        textbookResult.recordset.length === 0
+    ) {
         return null
     }
 
     const imageRequest = new sql.Request()
 
-    imageRequest.input('MAGT', sql.Int, maGT)
+    imageRequest.input(
+        'MAGT',
+        sql.Int,
+        maGT
+    )
 
-    const imageResult = await imageRequest.query(`
-        SELECT DUONGDAN, THUTU
-        FROM HINHANHGIAOTRINH
-        WHERE MAGT = @MAGT
-        ORDER BY THUTU ASC`)
+    const imageResult =
+        await imageRequest.query(`
+            SELECT DUONGDAN, THUTU
+            FROM HINHANHGIAOTRINH
+            WHERE MAGT = @MAGT
+            ORDER BY THUTU ASC
+        `)
 
-    const textbook = textbookResult.recordset[0]
+    const textbook =
+        textbookResult.recordset[0]
 
-    textbook.HINHANH = imageResult.recordset
+    textbook.HINHANH =
+        imageResult.recordset
 
     return textbook
 }
