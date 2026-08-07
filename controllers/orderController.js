@@ -8,7 +8,8 @@ const {
     cancelOrder: cancelOrderWorkflow,
     markOrderDelivered: markOrderDeliveredWorkflow,
     confirmOrderReceived: confirmOrderReceivedWorkflow,
-    reportOrderIssue: reportOrderIssueWorkflow
+    reportOrderIssue: reportOrderIssueWorkflow,
+    getPendingSellingOrderCount: getPendingSellingOrderCountWorkflow,
 } = require('../services/orderWorkflowService')
 
 const {
@@ -216,6 +217,31 @@ async function getSellingOrders(req, res) {
 }
 
 
+async function getPendingSellingOrderCount(
+    req,
+    res
+) {
+    try {
+        const pendingCount =
+            await getPendingSellingOrderCountWorkflow(
+                req.user.MATK
+            )
+
+        return res.status(200).json({
+            pendingCount
+        })
+    }
+
+    catch (error) {
+        return handleOrderError(
+            res,
+            error,
+            'lấy số đơn bán chờ xử lý'
+        )
+    }
+}
+
+
 async function getOrderDetail(req, res) {
     const validation = validateOrderId(req.params.maDH)
 
@@ -246,5 +272,6 @@ module.exports = {
     markOrderDelivered,
     confirmOrderReceived,
     reportOrderIssue,
-    getBuyingOrders
+    getBuyingOrders,
+    getPendingSellingOrderCount
 }

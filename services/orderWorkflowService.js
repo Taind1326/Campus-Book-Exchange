@@ -25,7 +25,8 @@ const {
     validateOrderIssue: validateOrderIssueService,
     markOrderAsDisputed: markOrderAsDisputedService,
     getExpiredOrderIds: getExpiredOrderIdsService,
-    validateExpiredOrderCompletion: validateExpiredOrderCompletionService
+    validateExpiredOrderCompletion: validateExpiredOrderCompletionService,
+    getPendingSellingOrderCount: getPendingSellingOrderCountService,
 } = require('./orderService')
 
 const {
@@ -262,6 +263,15 @@ async function getBuyingOrders(nguoiMua, page, limit) {
 
 async function getSellingOrders(nguoiBan, page, limit) {
     return getOrdersByUserService(nguoiBan, 'selling', page, limit)
+}
+
+
+async function getPendingSellingOrderCount(
+    nguoiBan
+) {
+    return getPendingSellingOrderCountService(
+        nguoiBan
+    )
 }
 
 
@@ -743,5 +753,6 @@ module.exports = {
     markOrderDelivered,
     confirmOrderReceived,
     reportOrderIssue,
-    autoCompleteExpiredOrders
+    autoCompleteExpiredOrders,
+    getPendingSellingOrderCount
 }

@@ -10,7 +10,8 @@ const {
     cancelOrder,
     markOrderDelivered,
     confirmOrderReceived,
-    reportOrderIssue
+    reportOrderIssue,
+    getPendingSellingOrderCount
 } = require('../controllers/orderController')
 
 const {
@@ -21,7 +22,9 @@ const router = express.Router()
 
 router.get('/buying', authenticateToken, getBuyingOrders)
 router.get('/selling', authenticateToken, getSellingOrders)
+router.get('/selling/pending-count', authenticateToken, getPendingSellingOrderCount)
 router.get('/:maDH', authenticateToken, getOrderDetail)
+
 
 router.post('/', authenticateToken, createOrder)
 

@@ -774,9 +774,36 @@ function validateExpiredOrderCompletion(order) {
 }
 
 
+async function getPendingSellingOrderCount(
+    nguoiBan
+) {
+    const request = new sql.Request()
+
+    request.input(
+        'NGUOIBAN',
+        sql.Int,
+        nguoiBan
+    )
+
+    const result = await request.query(`
+        SELECT COUNT(*) AS SOLUONGCHOXULY
+
+        FROM DONHANG
+
+        WHERE NGUOIBAN = @NGUOIBAN
+          AND TRANGTHAI = N'Đang trao đổi'
+    `)
+
+    return Number(
+        result.recordset[0]
+            ?.SOLUONGCHOXULY || 0
+    )
+}
+
+
 module.exports = {
-    validateOrder, 
-    checkExistingActiveOrder, 
+    validateOrder,
+    checkExistingActiveOrder,
     getTransactionType,
     insertOrder,
     insertOrderDetail,
@@ -787,6 +814,7 @@ module.exports = {
     rejectOrdersExceedingAvailableQuantity,
     getOrdersByUser,
     getOrderDetail,
+    getPendingSellingOrderCount,
     validateOrderRejection,
     rejectOrder,
     validateOrderCancellation,
