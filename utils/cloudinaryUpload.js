@@ -24,26 +24,66 @@ function uploadSingleImage(file, folder = 'Campus-Book-Exchange/giaotrinh') {
 }
 
 
-async function uploadImages(files, folder = 'Campus-Book-Exchange/giaotrinh') {
-    if (!files || files.length === 0) {
+async function uploadImages(
+    files,
+    folder =
+        'Campus-Book-Exchange/giaotrinh'
+) {
+    if (
+        !Array.isArray(files) ||
+        files.length === 0
+    ) {
         return []
     }
 
-    const uploadPromises = files.map(
-        (file, index) => {
-            return uploadSingleImage(
-                file,
-                folder
-            ).then(image => {
-                return {
-                    ...image,
-                    THUTU: index + 1
-                }
+    const uploadedImages = []
+
+    try {
+        for (
+            let index = 0;
+            index < files.length;
+            index += 1
+        ) {
+            const image =
+                await uploadSingleImage(
+                    files[index],
+                    folder
+                )
+
+            uploadedImages.push({
+                ...image,
+                THUTU: index + 1
             })
         }
-    )
 
-    return Promise.all(uploadPromises)
+        return uploadedImages
+    }
+
+    catch (error) {
+        const uploadedPublicIds =
+            uploadedImages.map(
+                image => image.PUBLIC_ID
+            )
+
+        if (
+            uploadedPublicIds.length > 0
+        ) {
+            try {
+                await deleteImages(
+                    uploadedPublicIds
+                )
+            }
+
+            catch (cleanupError) {
+                console.error(
+                    'Không thể dọn ảnh upload lỗi:',
+                    cleanupError
+                )
+            }
+        }
+
+        throw error
+    }
 }
 
 

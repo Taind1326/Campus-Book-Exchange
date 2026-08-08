@@ -100,10 +100,12 @@ const imageUploadOptions = {
 
 const uploadTextbookImages = multer(imageUploadOptions)
 const uploadSupportImages = multer(imageUploadOptions)
+const uploadMessageImages = multer(imageUploadOptions)
 
 
 module.exports = {
-    uploadTextbookImages,
+    uploadMessageImages,
     uploadSupportImages,
+    uploadTextbookImages,
     validateUploadedImages
 }
