@@ -1,105 +1,201 @@
-const nodemailer = require('nodemailer')
+const BREVO_API_URL =
+    'https://api.brevo.com/v3/smtp/email'
 
-let transporter = null
+const EMAIL_REQUEST_TIMEOUT_MS = 15000
+const OTP_EXPIRES_MINUTES = 10
 
-function escapeHtml(value) {
-    return String(value).replace(/[&<>'"]/g, char => ({
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            "'": '&#39;',
-            '"': '&quot;'
-        })[char]
+
+function createMailError(
+    message,
+    code,
+    details = null
+) {
+    const error = new Error(message)
+    error.code = code
+    error.details = details
+
+    return error
+}
+
+
+function getBrevoConfiguration() {
+    const apiKey =
+        process.env.BREVO_API_KEY?.trim()
+
+    const senderEmail =
+        process.env.BREVO_SENDER_EMAIL?.trim()
+
+    const senderName =
+        process.env.BREVO_SENDER_NAME?.trim() ||
+        'Campus Book Exchange'
+
+    const templateId =
+        Number(
+            process.env.BREVO_TEMPLATE_ID
+        )
+
+
+    if (
+        !apiKey ||
+        !senderEmail ||
+        !Number.isInteger(templateId) ||
+        templateId <= 0
+    ) {
+        throw createMailError(
+            'Chưa cấu hình đầy đủ dịch vụ Brevo!',
+            'EMAIL_NOT_CONFIGURED'
+        )
+    }
+
+
+    return {
+        apiKey,
+        senderEmail,
+        senderName,
+        templateId
+    }
+}
+
+
+async function readResponseBody(
+    response
+) {
+    const responseText =
+        await response.text()
+
+    if (!responseText) {
+        return null
+    }
+
+    try {
+        return JSON.parse(responseText)
+    }
+
+    catch {
+        return {
+            message: responseText
+        }
+    }
+}
+
+
+async function sendVerificationOtp(
+    email,
+    tenSV,
+    otp
+) {
+    const {
+        apiKey,
+        senderEmail,
+        senderName,
+        templateId
+    } = getBrevoConfiguration()
+
+    const controller =
+        new AbortController()
+
+    const timeoutId = setTimeout(
+        () => controller.abort(),
+        EMAIL_REQUEST_TIMEOUT_MS
     )
-}
 
 
-function getTransporter() {
-    if (!transporter) {
-        transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
+    try {
+        const response = await fetch(
+            BREVO_API_URL,
+            {
+                method: 'POST',
 
-            port: Number(
-                process.env.SMTP_PORT || 587
-            ),
+                headers: {
+                    accept:
+                        'application/json',
 
-            secure:
-                String(process.env.SMTP_SECURE).toLowerCase()
-                === 'true',
+                    'api-key':
+                        apiKey,
 
-            auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS
+                    'content-type':
+                        'application/json'
+                },
+
+                body: JSON.stringify({
+                    sender: {
+                        email: senderEmail,
+                        name: senderName
+                    },
+
+                    to: [
+                        {
+                            email,
+                            name: tenSV
+                        }
+                    ],
+
+                    templateId,
+
+                    params: {
+                        OTP: String(otp),
+
+                        TEN_SV:
+                            tenSV,
+
+                        EXPIRES_MINUTES:
+                            OTP_EXPIRES_MINUTES
+                    }
+                }),
+
+                signal: controller.signal
             }
-        })
+        )
+
+        const responseBody =
+            await readResponseBody(
+                response
+            )
+
+        if (!response.ok) {
+            throw createMailError(
+                responseBody?.message ||
+                'Brevo từ chối gửi email!',
+                'BREVO_EMAIL_REJECTED',
+                {
+                    status: response.status,
+                    response: responseBody
+                }
+            )
+        }
+
+        return responseBody
     }
 
-    return transporter
-}
+    catch (error) {
+        if (
+            error.code ===
+                'BREVO_EMAIL_REJECTED' ||
+            error.code ===
+                'EMAIL_NOT_CONFIGURED'
+        ) {
+            throw error
+        }
 
+        if (error.name === 'AbortError') {
+            throw createMailError(
+                'Brevo phản hồi quá thời gian!',
+                'BREVO_EMAIL_TIMEOUT'
+            )
+        }
 
-async function sendVerificationOtp(email, tenSV, otp) {
-    if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-        const error = new Error('Chưa cấu hình dịch vụ gửi email!')
-        error.code = 'EMAIL_NOT_CONFIGURED'
-        throw error
+        throw createMailError(
+            'Không thể kết nối đến Brevo!',
+            'BREVO_EMAIL_CONNECTION_FAILED',
+            {
+                message: error.message
+            }
+        )
     }
 
-    const safeName = escapeHtml(tenSV)
-
-    await getTransporter().sendMail({
-        from:
-            process.env.MAIL_FROM ||
-            process.env.SMTP_USER,
-
-        to: email,
-
-        subject:
-            'Mã xác minh Campus Book Exchange',
-
-        text:
-            `Xin chào ${tenSV}, mã xác minh tài khoản ` +
-            `Campus Book Exchange của bạn là ${otp}. ` +
-            'Mã có hiệu lực trong 10 phút. ' +
-            'Không chia sẻ mã này cho người khác.',
-
-        html: `
-            <div style="
-                font-family: Arial, sans-serif;
-                max-width: 560px;
-                margin: auto;
-                color: #1f2937;
-            ">
-                <h2 style="color: #1d4ed8;">
-                    HUIT Textbook Exchange
-                </h2>
-
-                <p>
-                    Xin chào <strong>${safeName}</strong>,
-                </p>
-
-                <p>Mã xác minh email của bạn là:</p>
-
-                <p style="
-                    font-size: 32px;
-                    font-weight: 700;
-                    letter-spacing: 8px;
-                    color: #1d4ed8;
-                ">
-                    ${otp}
-                </p>
-
-                <p>
-                    Mã có hiệu lực trong
-                    <strong>10 phút</strong>.
-                </p>
-
-                <p>
-                    Không chia sẻ mã này cho người khác.
-                </p>
-            </div>
-        `
-    })
+    finally {
+        clearTimeout(timeoutId)
+    }
 }
 
 
