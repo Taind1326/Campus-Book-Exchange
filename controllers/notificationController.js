@@ -1,74 +1,285 @@
 const {
-    getNotifications: getNotificationsService,
-    markNotificationAsRead: markNotificationAsReadService,
-    markAllNotificationsAsRead: markAllNotificationsAsReadService,
-    getUnreadNotificationCount: getUnreadNotificationCountService
-} = require('../services/notificationService')
+    getNotifications:
+        getNotificationsService,
 
-const {validateNotificationId} = require('../validators/notificationValidator')
+    getUnreadNotificationCount:
+        getUnreadNotificationCountService,
 
-async function getNotifications(req, res) {
+    markAllNotificationsAsRead:
+        markAllNotificationsAsReadService,
+
+    markNotificationAsRead:
+        markNotificationAsReadService
+} = require(
+    '../services/notificationService'
+)
+
+const {
+    deactivatePushDevice:
+        deactivatePushDeviceService,
+
+    registerPushDevice:
+        registerPushDeviceService
+} = require(
+    '../services/pushDeviceService'
+)
+
+const {
+    validateNotificationId,
+    validatePushDevice,
+    validatePushToken
+} = require(
+    '../validators/notificationValidator'
+)
+
+
+async function getNotifications(
+    req,
+    res
+) {
     try {
-        const notifications = await getNotificationsService(req.user.MATK)
+        const notifications =
+            await getNotificationsService(
+                req.user.MATK
+            )
 
-        return res.json(notifications)
+
+        return res.status(200).json(
+            notifications
+        )
     }
 
-    catch(error){
-        console.log('Lỗi lấy danh sách thông báo: ',error)
+    catch (error) {
+        console.error(
+            'Lỗi lấy danh sách thông báo:',
+            error
+        )
 
-        return res.status(500).json({message: 'Không thể lấy danh sách thông báo!'})
+
+        return res.status(500).json({
+            message:
+                'Không thể lấy danh sách thông báo!'
+        })
     }
 }
 
 
-async function markNotificationAsRead(req, res) {
-    const validation = validateNotificationId(req.params.id)
-
-    if(!validation.isValid){
-        return res.status(validation.status).json({message: validation.message})
-    }
-
+async function getUnreadNotificationCount(
+    req,
+    res
+) {
     try {
-        await markNotificationAsReadService(validation.data, req.user.MATK)
-        return res.status(200).json({message: 'Đã đánh dấu thông báo là đã đọc!'})
+        const count =
+            await getUnreadNotificationCountService(
+                req.user.MATK
+            )
+
+
+        return res.status(200).json({
+            unreadCount: count
+        })
     }
 
-    catch(error){
-        console.log('Lỗi đánh dấu thông báo đã đọc: ',error)
-        return res.status(error.status || 500).json({message: error.status ? error.message : 'Không thể đánh dấu thông báo đã đọc!'})
+    catch (error) {
+        console.error(
+            'Lỗi đếm thông báo chưa đọc:',
+            error
+        )
+
+
+        return res.status(500).json({
+            message:
+                'Không thể đếm thông báo chưa đọc!'
+        })
     }
 }
 
 
-async function markAllNotificationsAsRead(req, res) {
-    try {
-        await markAllNotificationsAsReadService(req.user.MATK)
+async function markNotificationAsRead(
+    req,
+    res
+) {
+    const validation =
+        validateNotificationId(
+            req.params.id
+        )
 
-        return res.status(200).json({message: 'Đã đánh dấu tất cả thông báo là đã đọc!'})
+
+    if (!validation.isValid) {
+        return res
+            .status(validation.status)
+            .json({
+                message:
+                    validation.message
+            })
     }
 
-    catch(error){
-        console.log('Lỗi đánh dấu tất cả thông báo đã đọc: ', error)
-        return res.status(500).json({message: 'Không thể đánh dấu tất cả thông báo!'})
+
+    try {
+        await markNotificationAsReadService(
+            validation.data,
+            req.user.MATK
+        )
+
+
+        return res.status(200).json({
+            message:
+                'Đã đánh dấu thông báo là đã đọc!'
+        })
+    }
+
+    catch (error) {
+        console.error(
+            'Lỗi đánh dấu thông báo đã đọc:',
+            error
+        )
+
+
+        return res
+            .status(error.status || 500)
+            .json({
+                message:
+                    error.status
+                        ? error.message
+                        : (
+                            'Không thể đánh dấu ' +
+                            'thông báo đã đọc!'
+                        )
+            })
     }
 }
 
 
-
-async function getUnreadNotificationCount(req, res) {
+async function markAllNotificationsAsRead(
+    req,
+    res
+) {
     try {
-        const count = await getUnreadNotificationCountService(req.user.MATK)
+        await markAllNotificationsAsReadService(
+            req.user.MATK
+        )
 
-        return res.status(200).json({unreadCount: count})
+
+        return res.status(200).json({
+            message:
+                'Đã đánh dấu tất cả thông báo là đã đọc!'
+        })
     }
 
-    catch(error){
-        console.log('Lỗi đếm thông báo chưa đọc: ', error)
-        return res.status(500).json({message: 'Không thể đếm thông báo chưa đọc!'})
+    catch (error) {
+        console.error(
+            'Lỗi đánh dấu tất cả thông báo đã đọc:',
+            error
+        )
+
+
+        return res.status(500).json({
+            message:
+                'Không thể đánh dấu tất cả thông báo!'
+        })
     }
 }
 
 
+async function registerPushDevice(
+    req,
+    res
+) {
+    const validation =
+        validatePushDevice(req.body)
 
-module.exports = {getNotifications, markNotificationAsRead, markAllNotificationsAsRead, getUnreadNotificationCount}
+
+    if (!validation.isValid) {
+        return res
+            .status(validation.status)
+            .json({
+                message:
+                    validation.message
+            })
+    }
+
+
+    try {
+        const device =
+            await registerPushDeviceService(
+                req.user.MATK,
+                validation.data
+            )
+
+
+        return res.status(200).json({
+            message:
+                'Đã bật thông báo trên thiết bị này!',
+            device
+        })
+    }
+
+    catch (error) {
+        console.error(
+            'Lỗi đăng ký thiết bị nhận thông báo:',
+            error
+        )
+
+
+        return res.status(500).json({
+            message:
+                'Không thể bật thông báo trên thiết bị này!'
+        })
+    }
+}
+
+
+async function deactivatePushDevice(
+    req,
+    res
+) {
+    const validation =
+        validatePushToken(req.body)
+
+
+    if (!validation.isValid) {
+        return res
+            .status(validation.status)
+            .json({
+                message:
+                    validation.message
+            })
+    }
+
+
+    try {
+        await deactivatePushDeviceService(
+            req.user.MATK,
+            validation.data.token
+        )
+
+
+        return res.status(200).json({
+            message:
+                'Đã tắt thông báo trên thiết bị này!'
+        })
+    }
+
+    catch (error) {
+        console.error(
+            'Lỗi tắt thông báo trên thiết bị:',
+            error
+        )
+
+
+        return res.status(500).json({
+            message:
+                'Không thể tắt thông báo trên thiết bị này!'
+        })
+    }
+}
+
+
+module.exports = {
+    deactivatePushDevice,
+    getNotifications,
+    getUnreadNotificationCount,
+    markAllNotificationsAsRead,
+    markNotificationAsRead,
+    registerPushDevice
+}

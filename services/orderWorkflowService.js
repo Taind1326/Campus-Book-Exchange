@@ -1,5 +1,11 @@
 const {sql} = require('../config/db')
-const {getIO} = require('../config/socket')
+
+const {
+    dispatchNotification,
+    dispatchNotifications
+} = require(
+    './notificationDispatchService'
+)
 
 const {
     validateOrder: validateOrderService,
@@ -105,15 +111,9 @@ async function createOrder(data, nguoiMua) {
         await transaction.commit()
         transactionStarted = false
 
-        try {
-            const io = getIO()
-
-            io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
-        }
-
-        catch (socketError) {
-            console.error('Lỗi gửi thông báo realtime tạo đơn hàng:', socketError)
-        }
+        await dispatchNotification(
+            notification
+        )
 
         const result = {
             maDH,
@@ -156,63 +156,122 @@ async function createOrder(data, nguoiMua) {
 }
 
 
-async function confirmOrder(maDH, nguoiBan) {
-    const transaction = new sql.Transaction()
+async function confirmOrder(
+    maDH,
+    nguoiBan
+) {
+    const transaction =
+        new sql.Transaction()
+
     let transactionStarted = false
 
+
     try {
-        await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE)
+        await transaction.begin(
+            sql.ISOLATION_LEVEL.SERIALIZABLE
+        )
 
         transactionStarted = true
 
-        const exchangeProposal = await getExchangeProposalForOrderWithLockService(transaction, maDH)
+
+        const exchangeProposal =
+            await getExchangeProposalForOrderWithLockService(
+                transaction,
+                maDH
+            )
 
         let exchangeTextbooks = null
 
-        if (exchangeProposal) {
-            exchangeTextbooks = await getExchangeTextbooksForConfirmationWithLockService(transaction, exchangeProposal)
-        }
-
-        const order = await getOrderForConfirmationWithLockService(transaction, maDH)
-
-        validateOrderConfirmationService(order, nguoiBan)
 
         if (exchangeProposal) {
-            validateExchangeConfirmationService(order, exchangeProposal, exchangeTextbooks)
-
-            await holdExchangeTextbookQuantityService(transaction, exchangeProposal)
+            exchangeTextbooks =
+                await getExchangeTextbooksForConfirmationWithLockService(
+                    transaction,
+                    exchangeProposal
+                )
         }
 
-        await confirmOrderAndHoldQuantityService(transaction, order)
 
-        const rejectedOrders = await rejectOrdersExceedingAvailableQuantityService(transaction, order)
-        const confirmedNotification = await createOrderConfirmedNotificationService(transaction, order)
+        const order =
+            await getOrderForConfirmationWithLockService(
+                transaction,
+                maDH
+            )
+
+
+        validateOrderConfirmationService(
+            order,
+            nguoiBan
+        )
+
+
+        if (exchangeProposal) {
+            validateExchangeConfirmationService(
+                order,
+                exchangeProposal,
+                exchangeTextbooks
+            )
+
+            await holdExchangeTextbookQuantityService(
+                transaction,
+                exchangeProposal
+            )
+        }
+
+
+        await confirmOrderAndHoldQuantityService(
+            transaction,
+            order
+        )
+
+
+        const rejectedOrders =
+            await rejectOrdersExceedingAvailableQuantityService(
+                transaction,
+                order
+            )
+
+        const confirmedNotification =
+            await createOrderConfirmedNotificationService(
+                transaction,
+                order
+            )
+
         const rejectedNotifications = []
 
-        for (const rejectedOrder of rejectedOrders) {
-            const notification = await createOrderRejectedNotificationService(transaction, rejectedOrder, order.TENGT)
 
-            rejectedNotifications.push(notification)
+        for (
+            const rejectedOrder
+            of rejectedOrders
+        ) {
+            const notification =
+                await createOrderRejectedNotificationService(
+                    transaction,
+                    rejectedOrder,
+                    order.TENGT
+                )
+
+            rejectedNotifications.push(
+                notification
+            )
         }
+
 
         await transaction.commit()
         transactionStarted = false
 
-        try {
-            const io = getIO()
 
-            io.to(`user:${confirmedNotification.NGUOINHAN}`).emit('notification:new', confirmedNotification)
+        await dispatchNotifications([
+            confirmedNotification,
+            ...rejectedNotifications
+        ])
 
-            for (const notification of rejectedNotifications) {
-                io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
-            }
-        }
 
-        catch (socketError) {
-            console.error('Lỗi gửi realtime xác nhận đơn:', socketError)
-        }
+        const soLuongConLai =
+            order.TONGSOLUONG -
+            (order.SOLUONGDANGGIU ?? 0) -
+            order.SOLUONG
 
-        const soLuongConLai = order.TONGSOLUONG - (order.SOLUONGDANGGIU ?? 0) - order.SOLUONG
         const result = {
             maDH: order.MADH,
             maGT: order.MAGT,
@@ -221,21 +280,49 @@ async function confirmOrder(maDH, nguoiBan) {
             soLuong: order.SOLUONG,
             trangThai: 'Đã chốt',
             soLuongConLai,
-            soDonBiTuChoi: rejectedOrders.length
+            soDonBiTuChoi:
+                rejectedOrders.length
         }
 
-        if (exchangeProposal && exchangeTextbooks) {
-            const exchangeTextbook = exchangeTextbooks.exchangeTextbook
-            const soLuongMangDoiConLai = exchangeTextbook.SOLUONG - (exchangeTextbook.SOLUONGDANGGIU ?? 0) - exchangeProposal.SOLUONGMANGDOI
+
+        if (
+            exchangeProposal &&
+            exchangeTextbooks
+        ) {
+            const exchangeTextbook =
+                exchangeTextbooks
+                    .exchangeTextbook
+
+            const soLuongMangDoiConLai =
+                exchangeTextbook.SOLUONG -
+                (
+                    exchangeTextbook
+                        .SOLUONGDANGGIU ?? 0
+                ) -
+                exchangeProposal
+                    .SOLUONGMANGDOI
+
 
             result.traoDoi = {
-                maGTDuocDoi: exchangeProposal.MAGTDUOCDOI,
-                maGTMangDoi: exchangeProposal.MAGTMANGDOI,
-                tenGTMangDoi: exchangeTextbook.TENGT,
-                soLuongMangDoi: exchangeProposal.SOLUONGMANGDOI,
+                maGTDuocDoi:
+                    exchangeProposal
+                        .MAGTDUOCDOI,
+
+                maGTMangDoi:
+                    exchangeProposal
+                        .MAGTMANGDOI,
+
+                tenGTMangDoi:
+                    exchangeTextbook.TENGT,
+
+                soLuongMangDoi:
+                    exchangeProposal
+                        .SOLUONGMANGDOI,
+
                 soLuongMangDoiConLai
             }
         }
+
 
         return result
     }
@@ -247,9 +334,13 @@ async function confirmOrder(maDH, nguoiBan) {
             }
 
             catch (rollbackError) {
-                console.log('Lỗi rollback xác nhận đơn:', rollbackError)
+                console.log(
+                    'Lỗi rollback xác nhận đơn:',
+                    rollbackError
+                )
             }
         }
+
 
         throw error
     }
@@ -300,15 +391,7 @@ async function rejectOrder(maDH, nguoiBan) {
         await transaction.commit()
         transactionStarted = false
 
-        try {
-            const io = getIO()
-
-            io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
-        }
-
-        catch (socketError) {
-            console.error('Lỗi gửi realtime từ chối đơn:', socketError)
-        }
+        await dispatchNotification(notification)
 
         return {
             maDH: order.MADH,
@@ -369,15 +452,7 @@ async function cancelOrder(maDH, nguoiDung) {
         await transaction.commit()
         transactionStarted = false
 
-        try {
-            const io = getIO()
-
-            io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
-        }
-
-        catch (socketError) {
-            console.error('Lỗi gửi realtime hủy đơn:', socketError)
-        }
+        await dispatchNotification(notification)
 
         const result = {
             maDH: order.MADH,
@@ -438,15 +513,7 @@ async function markOrderDelivered(maDH, nguoiBan) {
         await transaction.commit()
         transactionStarted = false
 
-        try {
-            const io = getIO()
-
-            io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
-        }
-
-        catch (socketError) {
-            console.error('Lỗi gửi realtime xác nhận đã giao:', socketError)
-        }
+        await dispatchNotification(notification)
 
         return {
             maDH: order.MADH,
@@ -511,15 +578,7 @@ async function confirmOrderReceived(maDH, nguoiMua) {
         await transaction.commit()
         transactionStarted = false
 
-        try {
-            const io = getIO()
-
-            io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
-        }
-
-        catch (socketError) {
-            console.error('Lỗi gửi realtime hoàn tất giao dịch:', socketError)
-        }
+        await dispatchNotification(notification)
 
         const result = {
             maDH: order.MADH,
@@ -594,15 +653,7 @@ async function reportOrderIssue(data, nguoiMua) {
         await transaction.commit()
         transactionStarted = false
 
-        try {
-            const io = getIO()
-
-            io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
-        }
-
-        catch (socketError) {
-            console.error('Lỗi gửi realtime báo có vấn đề:', socketError)
-        }
+        await dispatchNotification(notification)
 
         return {
             maDH: order.MADH,
@@ -695,17 +746,9 @@ async function autoCompleteExpiredOrders(limit = 50) {
 
             completedOrders.push(completedOrder)
 
-            try {
-                const io = getIO()
-
-                for (const notification of notifications) {
-                    io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
-                }
-            }
-
-            catch (socketError) {
-                console.error(`Lỗi gửi realtime tự động hoàn tất đơn ${maDH}:`, socketError)
-            }
+            await dispatchNotifications(
+                notifications
+            )
         }
 
         catch (error) {

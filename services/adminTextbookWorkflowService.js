@@ -1,5 +1,9 @@
 const {sql} = require('../config/db')
-const {getIO} = require('../config/socket')
+const {
+    dispatchNotification
+} = require(
+    './notificationDispatchService'
+)
 
 const {
     getTextbookForModerationWithLock: getTextbookForModerationWithLockService,
@@ -82,15 +86,9 @@ async function executeTextbookModeration(maGT, adminId, auditContext, auditInfo,
         await transaction.commit()
         transactionStarted = false
 
-        try {
-            const io = getIO()
-
-            io.to(`user:${notification.NGUOINHAN}`).emit('notification:new', notification)
-        }
-
-        catch (socketError) {
-            console.error('Lỗi gửi realtime quản lý bài đăng:', socketError)
-        }
+        await dispatchNotification(
+            notification
+        )
 
         return formatModeratedTextbook(updatedTextbook, adminId)
     }

@@ -12,13 +12,21 @@ const {
 } = require('../utils/cloudinaryUpload')
 
 const {
+    sendPushNotification
+} = require(
+    './pushNotificationService'
+)
+
+const {
     getConversationById,
     getMessagesByConversation,
     getReceiverId,
     insertMessage,
     insertMessageImages,
+
     markConversationMessagesAsRead:
         markMessagesAsReadQuery,
+
     updateConversationActivity,
     validateConversation,
     validateParticipant
@@ -27,7 +35,7 @@ const {
 
 async function sendTextMessage(
     data,
-    nguoiGui
+    senderId
 ) {
     const transaction =
         new sql.Transaction()
@@ -39,55 +47,64 @@ async function sendTextMessage(
         await transaction.begin()
         transactionStarted = true
 
+
         const conversation =
             await getConversationById(
                 transaction,
                 data.maCuoc
             )
 
+
         validateParticipant(
             conversation,
-            nguoiGui
+            senderId
         )
 
         validateConversation(
             conversation
         )
 
-        const nguoiNhan =
+
+        const receiverId =
             getReceiverId(
                 conversation,
-                nguoiGui
+                senderId
             )
+
 
         const insertedMessage =
             await insertMessage(
                 transaction,
                 data.maCuoc,
-                nguoiGui,
-                nguoiNhan,
+                senderId,
+                receiverId,
                 data.noiDung,
                 'Văn bản'
             )
+
 
         await updateConversationActivity(
             transaction,
             data.maCuoc
         )
 
+
         await transaction.commit()
         transactionStarted = false
+
 
         const message = {
             ...insertedMessage,
             HINHANH: []
         }
 
-        emitRealtimeMessage(
+
+        await dispatchMessage(
             message,
-            nguoiGui,
-            nguoiNhan
+            senderId,
+            receiverId
         )
+
 
         return message
     }
@@ -100,6 +117,7 @@ async function sendTextMessage(
             )
         }
 
+
         throw error
     }
 }
@@ -108,7 +126,7 @@ async function sendTextMessage(
 async function sendImageMessage(
     data,
     files,
-    nguoiGui
+    senderId
 ) {
     const transaction =
         new sql.Transaction()
@@ -121,26 +139,30 @@ async function sendImageMessage(
         await transaction.begin()
         transactionStarted = true
 
+
         const conversation =
             await getConversationById(
                 transaction,
                 data.maCuoc
             )
 
+
         validateParticipant(
             conversation,
-            nguoiGui
+            senderId
         )
 
         validateConversation(
             conversation
         )
 
-        const nguoiNhan =
+
+        const receiverId =
             getReceiverId(
                 conversation,
-                nguoiGui
+                senderId
             )
+
 
         uploadedImages =
             await uploadImages(
@@ -148,15 +170,17 @@ async function sendImageMessage(
                 'Campus-Book-Exchange/tin-nhan'
             )
 
+
         const insertedMessage =
             await insertMessage(
                 transaction,
                 data.maCuoc,
-                nguoiGui,
-                nguoiNhan,
+                senderId,
+                receiverId,
                 data.noiDung,
                 'Hình ảnh'
             )
+
 
         const insertedImages =
             await insertMessageImages(
@@ -165,24 +189,29 @@ async function sendImageMessage(
                 uploadedImages
             )
 
+
         await updateConversationActivity(
             transaction,
             data.maCuoc
         )
 
+
         await transaction.commit()
         transactionStarted = false
+
 
         const message = {
             ...insertedMessage,
             HINHANH: insertedImages
         }
 
-        emitRealtimeMessage(
+
+        await dispatchMessage(
             message,
-            nguoiGui,
-            nguoiNhan
+            senderId,
+            receiverId
         )
+
 
         return message
     }
@@ -195,9 +224,11 @@ async function sendImageMessage(
             )
         }
 
+
         await cleanupUploadedImages(
             uploadedImages
         )
+
 
         throw error
     }
@@ -205,7 +236,7 @@ async function sendImageMessage(
 
 
 async function getConversationMessages(
-    maCuoc,
+    conversationId,
     userId
 ) {
     const transaction =
@@ -218,25 +249,30 @@ async function getConversationMessages(
         await transaction.begin()
         transactionStarted = true
 
+
         const conversation =
             await getConversationById(
                 transaction,
-                maCuoc
+                conversationId
             )
+
 
         validateParticipant(
             conversation,
             userId
         )
 
+
         const messages =
             await getMessagesByConversation(
                 transaction,
-                maCuoc
+                conversationId
             )
+
 
         await transaction.commit()
         transactionStarted = false
+
 
         return messages
     }
@@ -249,13 +285,14 @@ async function getConversationMessages(
             )
         }
 
+
         throw error
     }
 }
 
 
 async function markConversationMessagesAsRead(
-    maCuoc,
+    conversationId,
     userId
 ) {
     const transaction =
@@ -268,22 +305,26 @@ async function markConversationMessagesAsRead(
         await transaction.begin()
         transactionStarted = true
 
+
         const conversation =
             await getConversationById(
                 transaction,
-                maCuoc
+                conversationId
             )
+
 
         validateParticipant(
             conversation,
             userId
         )
 
+
         await markMessagesAsReadQuery(
             transaction,
-            maCuoc,
+            conversationId,
             userId
         )
+
 
         await transaction.commit()
         transactionStarted = false
@@ -297,7 +338,64 @@ async function markConversationMessagesAsRead(
             )
         }
 
+
         throw error
+    }
+}
+
+
+async function dispatchMessage(
+    message,
+    senderId,
+    receiverId
+) {
+    emitRealtimeMessage(
+        message,
+        senderId,
+        receiverId
+    )
+
+
+    try {
+        await sendPushNotification(
+            receiverId,
+            {
+                TIEUDE:
+                    'Bạn có tin nhắn mới',
+
+                NOIDUNG:
+                    message.LOAITINNHAN ===
+                    'Hình ảnh'
+                        ? (
+                            'Bạn vừa nhận được ' +
+                            'một hình ảnh mới.'
+                        )
+                        : (
+                            'Bạn vừa nhận được ' +
+                            'một tin nhắn mới.'
+                        ),
+
+                LOAI: 'Tin nhắn',
+
+                MACUOC:
+                    message.MACUOC,
+
+                MATN:
+                    message.MATN,
+
+                DUONGDAN:
+                    '/chat?' +
+                    'conversationId=' +
+                    message.MACUOC
+            }
+        )
+    }
+
+    catch (error) {
+        console.error(
+            'Không thể gửi push tin nhắn:',
+            error
+        )
     }
 }
 
@@ -310,12 +408,14 @@ function emitRealtimeMessage(
     try {
         const io = getIO()
 
+
         io.to(
             `user:${senderId}`
         ).emit(
             'message:sent',
             message
         )
+
 
         io.to(
             `user:${receiverId}`
@@ -356,15 +456,22 @@ async function cleanupUploadedImages(
 ) {
     const publicIds =
         uploadedImages
-            .map(image => image.PUBLIC_ID)
+            .map(
+                image =>
+                    image.PUBLIC_ID
+            )
             .filter(Boolean)
+
 
     if (publicIds.length === 0) {
         return
     }
 
+
     try {
-        await deleteImages(publicIds)
+        await deleteImages(
+            publicIds
+        )
     }
 
     catch (cleanupError) {

@@ -1,20 +1,63 @@
 const express = require('express')
-const {authenticateToken} = require('../middlewares/authMiddleware')
+
 const {
+    authenticateToken
+} = require(
+    '../middlewares/authMiddleware'
+)
+
+const {
+    deactivatePushDevice,
     getNotifications,
-    markNotificationAsRead,
+    getUnreadNotificationCount,
     markAllNotificationsAsRead,
-    getUnreadNotificationCount
-} = require('../controllers/notificationController')
+    markNotificationAsRead,
+    registerPushDevice
+} = require(
+    '../controllers/notificationController'
+)
+
 
 const router = express.Router()
 
-router.get('/', authenticateToken, getNotifications)
-router.get('/unread-count', authenticateToken, getUnreadNotificationCount)
+
+router.get(
+    '/',
+    authenticateToken,
+    getNotifications
+)
+
+router.get(
+    '/unread-count',
+    authenticateToken,
+    getUnreadNotificationCount
+)
 
 
-router.patch('/read-all', authenticateToken, markAllNotificationsAsRead)
+router.post(
+    '/push-device',
+    authenticateToken,
+    registerPushDevice
+)
 
-router.patch('/:id/read', authenticateToken, markNotificationAsRead)
+router.delete(
+    '/push-device',
+    authenticateToken,
+    deactivatePushDevice
+)
+
+
+router.patch(
+    '/read-all',
+    authenticateToken,
+    markAllNotificationsAsRead
+)
+
+router.patch(
+    '/:id/read',
+    authenticateToken,
+    markNotificationAsRead
+)
+
 
 module.exports = router
